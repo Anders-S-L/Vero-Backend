@@ -45,7 +45,7 @@ export const registerOwnerWithOrganization = async (input: RegisterOwnerInput) =
 
     const organizationId = organisationResult.data.id as string
 
-    const profileResult = await supabaseAdmin.from('Profiles').insert({
+    const profileResult = await supabaseAdmin.from('profiles').insert({
         id: userId,
         organization_id: organizationId,
         full_name: input.fullName,
