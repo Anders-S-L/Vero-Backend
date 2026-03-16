@@ -38,10 +38,6 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 }
 
 export const requireAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    console.log('supabase url:', process.env.SUPABASE_URL?.substring(0, 20))
-    console.log('service key start:', process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 20))
-    console.log('requireAdmin - user id:', req.user?.id)
-
 
     const { data: profile, error } = await supabaseAdmin
         .from('profiles')
