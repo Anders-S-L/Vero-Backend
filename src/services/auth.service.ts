@@ -5,7 +5,7 @@ type RegisterOwnerInput = {
     email: string
     password: string
     fullName: string
-    organizationName: string
+    organisationName: string
     cvr?: string
     currency: string
     fiscalYearStart: number
@@ -30,7 +30,7 @@ export const registerOwnerWithOrganization = async (input: RegisterOwnerInput) =
     const organisationResult = await supabaseAdmin
         .from('organisations')
         .insert({
-            name: input.organizationName,
+            name: input.organisationName,
             CVR: input.cvr,
             currency: input.currency,
             fiscal_year_start: input.fiscalYearStart,
@@ -43,11 +43,11 @@ export const registerOwnerWithOrganization = async (input: RegisterOwnerInput) =
         throw new Error(organisationResult.error?.message || 'Kunne ikke oprette virksomhed.')
     }
 
-    const organizationId = organisationResult.data.id as string
+    const organisationId = organisationResult.data.id as string
 
     const profileResult = await supabaseAdmin.from('profiles').insert({
         id: userId,
-        organization_id: organizationId,
+        organisations_id: organisationId,
         full_name: input.fullName,
         role: 'admin',
         is_active: true,
@@ -55,14 +55,14 @@ export const registerOwnerWithOrganization = async (input: RegisterOwnerInput) =
     })
 
     if (profileResult.error) {
-        await supabaseAdmin.from('organisations').delete().eq('id', organizationId)
+        await supabaseAdmin.from('organisations').delete().eq('id', organisationId)
         await supabaseAdmin.auth.admin.deleteUser(userId)
         throw new Error(profileResult.error.message || 'Kunne ikke oprette profil.')
     }
 
     return {
         userId,
-        organizationId,
+        organisationId,
         role: 'admin' as const,
     }
 }

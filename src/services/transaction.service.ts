@@ -3,9 +3,12 @@ import { supabaseAdmin } from '../lib/supabase'
 export const createTransaction = async (organisationId: string, userId: string, amount: number, date: string, category_id: string, description: string | null) => {
     const { data, error } = await supabaseAdmin
         .from('transactions')
-        .insert({ organization_id: organisationId, created_by: userId, amount, date, category_id, description, is_deleted: false })
+        .insert({ organisations_id: organisationId, created_by: userId, amount, date, category_id, description, is_deleted: false })
         .select('id, organisations_id, category_id, amount, date, description, created_at')
         .single()
+
+    console.log('transaction data:', data)
+    console.log('transaction error:', error)
 
     if (error || !data) throw new Error('Kunne ikke oprette transaktion.')
     return data
