@@ -76,6 +76,19 @@ export const loginWithEmailPassword = async (input: LoginRequest) => {
     if (loginResult.error || !loginResult.data.session || !loginResult.data.user) {
         throw new Error(loginResult.error?.message || 'Login fejlede.')
     }
+    const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('full_name, role, organisations_id')
+        .eq('id', loginResult.data.user.id)
+        .single()
+
+    const { data: organisation } = await supabaseAdmin
+        .from('organisations')
+        .select('name')
+        .eq('id', profile?.organisations_id)
+        .single()
+
+
 
     return {
         userId: loginResult.data.user.id,
@@ -83,5 +96,8 @@ export const loginWithEmailPassword = async (input: LoginRequest) => {
         refreshToken: loginResult.data.session.refresh_token,
         expiresIn: loginResult.data.session.expires_in,
         tokenType: loginResult.data.session.token_type,
+        fullName: profile?.full_name,
+        role: profile?.role,
+        organisationName: organisation?.name,
     }
 }

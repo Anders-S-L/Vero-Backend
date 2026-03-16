@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '../lib/supabase'
 
 export const createCategoryService = async (
-    organizationId: string,
+    organisationId: string,
     departmentId: string,
     name: string,
     type: string,
@@ -9,7 +9,7 @@ export const createCategoryService = async (
     const { data: existing } = await supabaseAdmin
         .from('categories')
         .select('id')
-        .eq('organization_id', organizationId)
+        .eq('organisations_id', organisationId)
         .eq('department_id', departmentId)
         .ilike('name', name)
         .maybeSingle()
@@ -19,13 +19,13 @@ export const createCategoryService = async (
     const { data, error } = await supabaseAdmin
         .from('categories')
         .insert({
-            organization_id: organizationId,
+            organisations_id: organisationId,
             department_id: departmentId,
             name,
             type,
             is_active: true,
         })
-        .select('id, organization_id, department_id, name, type, is_active, created_at')
+        .select('id, organisations_id, department_id, name, type, is_active, created_at')
         .single()
     console.log('data:', data)
     console.log('error:', error)
@@ -34,11 +34,11 @@ export const createCategoryService = async (
     return data
 }
 
-export const getCategoriesService = async (organizationId: string, departmentId?: string) => {
+export const getCategoriesService = async (organisationId: string, departmentId?: string) => {
     let query = supabaseAdmin
         .from('categories')
-        .select('id, organization_id, department_id, name, type, is_active, created_at')
-        .eq('organization_id', organizationId)
+        .select('id, organisations_id, department_id, name, type, is_active, created_at')
+        .eq('organisations_id', organisationId)
         .eq('is_active', true)
 
     if (departmentId) query = query.eq('department_id', departmentId)

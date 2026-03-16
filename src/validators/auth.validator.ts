@@ -13,7 +13,7 @@ export const validateRegisterOwnerInput = (payload: unknown): RegisterOwnerReque
         email,
         password,
         fullName,
-        organizationName,
+        organisationName,
         cvr,
         currency,
         fiscalYearStart,
@@ -31,8 +31,8 @@ export const validateRegisterOwnerInput = (payload: unknown): RegisterOwnerReque
         throw new Error('fullName skal være mindst 2 tegn.')
     }
 
-    if (!organizationName || organizationName.trim().length < 2) {
-        throw new Error('organizationName skal være mindst 2 tegn.')
+    if (!organisationName || organisationName.trim().length < 2) {
+        throw new Error('organisationName skal være mindst 2 tegn.')
     }
 
     if (!currency || currency.trim().length !== 3) {
@@ -52,7 +52,7 @@ export const validateRegisterOwnerInput = (payload: unknown): RegisterOwnerReque
         email: email.trim().toLowerCase(),
         password,
         fullName: fullName.trim(),
-        organizationName: organizationName.trim(),
+        organisationName: organisationName.trim(),
         cvr: cvr?.trim() || undefined,
         currency: currency.trim().toUpperCase(),
         fiscalYearStart,

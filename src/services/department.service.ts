@@ -1,10 +1,10 @@
 import { supabaseAdmin } from '../lib/supabase'
 
-export const createDepartmentService = async (organizationId: string, name: string) => {
+export const createDepartmentService = async (organisationId: string, name: string) => {
     const { data: existing } = await supabaseAdmin
         .from('departments')
         .select('id')
-        .eq('organisations_id', organizationId)
+        .eq('organisations_id', organisationId)
         .ilike('name', name)
         .maybeSingle()
 
@@ -12,7 +12,7 @@ export const createDepartmentService = async (organizationId: string, name: stri
 
     const { data, error } = await supabaseAdmin
         .from('departments')
-        .insert({ organisations_id: organizationId, name, is_active: true })
+        .insert({ organisations_id: organisationId, name, is_active: true })
         .select('id, organisations_id, name, is_active, created_at')
         .single()
 
@@ -20,11 +20,11 @@ export const createDepartmentService = async (organizationId: string, name: stri
     return data
 }
 
-export const getDepartmentsService = async (organizationId: string) => {
+export const getDepartmentsService = async (organisationId: string) => {
     const { data, error } = await supabaseAdmin
         .from('departments')
         .select('id, name, is_active, created_at')
-        .eq('organisations_id', organizationId)
+        .eq('organisations_id', organisationId)
         .order('created_at', { ascending: true })
 
     if (error) throw new Error('Kunne ikke hente departments.')

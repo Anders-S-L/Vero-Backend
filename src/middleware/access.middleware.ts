@@ -7,7 +7,7 @@ declare global {
             user?: { id: string; email?: string }
             userProfile?: {
                 id: string
-                organization_id: string
+                organisations_id: string
                 role: 'admin' | 'manager' | 'employee' | 'auditor'
                 is_active: boolean
             }
@@ -41,7 +41,7 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
 
     const { data: profile, error } = await supabaseAdmin
         .from('profiles')
-        .select('id, organization_id, role, is_active')
+        .select('id, organisations_id, role, is_active')
         .eq('id', req.user!.id)
         .single()
 

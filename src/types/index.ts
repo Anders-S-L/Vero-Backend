@@ -2,7 +2,7 @@ export type RegisterOwnerRequest = {
     email: string
     password: string
     fullName: string
-    organizationName: string
+    organisationName: string
     cvr?: string
     currency: string
     fiscalYearStart: number
