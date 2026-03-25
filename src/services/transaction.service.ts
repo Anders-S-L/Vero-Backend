@@ -17,7 +17,24 @@ export const createTransaction = async (organisationId: string, userId: string, 
 export const getTransactions = async (organisationId: string) => {
     const { data, error } = await supabaseAdmin
         .from('transactions')
-        .select('id, organisations_id, category_id, amount, date, description, created_at')
+        .select(`
+            id,
+            organisations_id,
+            category_id,
+            amount,
+            date,
+            description,
+            created_at,
+            categories (
+                id,
+                name,
+                type,
+                departments (
+                    id,
+                    name
+                )
+            )
+        `)
         .eq('organisations_id', organisationId)
         .eq('is_deleted', false)
         .order('date', { ascending: false })
