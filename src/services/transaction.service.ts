@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../lib/supabase'
+import { recalculateMonthlyKpis } from './kpi-value.service'
 import { Transaction } from '../types'
 
 export const createTransaction = async (organisationId: string, userId: string, amount: number, date: string, category_id: string, description: string | null) => {
@@ -12,6 +13,7 @@ export const createTransaction = async (organisationId: string, userId: string, 
     console.log('transaction error:', error)
 
     if (error || !data) throw new Error('Kunne ikke oprette transaktion.')
+    await recalculateMonthlyKpis(organisationId, date)
     return data
 }
 
@@ -70,23 +72,42 @@ export const getTransactionsForKpi = async (
     })) as Transaction[]
 }
 
-export const updateTransaction = async (id: string, amount: number, date: string, description: string | null) => {
+const getTransactionById = async (organisationId: string, id: string) => {
+    const { data, error } = await supabaseAdmin
+        .from('transactions')
+        .select('id, organisations_id, category_id, amount, date, description, created_at, is_deleted')
+        .eq('id', id)
+        .eq('organisations_id', organisationId)
+        .single()
+
+    if (error || !data) throw new Error('Kunne ikke finde transaktion.')
+    return data
+}
+
+export const updateTransaction = async (organisationId: string, id: string, amount: number, date: string, description: string | null) => {
+    const existing = await getTransactionById(organisationId, id)
     const { data, error } = await supabaseAdmin
         .from('transactions')
         .update({ amount, date, description, updated_at: new Date().toISOString() })
         .eq('id', id)
+        .eq('organisations_id', organisationId)
         .select('id, organisations_id, category_id, amount, date, description, created_at')
         .single()
 
     if (error || !data) throw new Error('Kunne ikke opdatere transaktion.')
+    await recalculateMonthlyKpis(organisationId, existing.date)
+    if (existing.date !== date) await recalculateMonthlyKpis(organisationId, date)
     return data
 }
 
-export const deleteTransaction = async (id: string) => {
+export const deleteTransaction = async (organisationId: string, id: string) => {
+    const existing = await getTransactionById(organisationId, id)
     const { error } = await supabaseAdmin
         .from('transactions')
         .update({ is_deleted: true })
         .eq('id', id)
+        .eq('organisations_id', organisationId)
 
     if (error) throw new Error('Kunne ikke slette transaktion.')
+    await recalculateMonthlyKpis(organisationId, existing.date)
 }

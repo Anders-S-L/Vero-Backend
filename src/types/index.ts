@@ -80,3 +80,33 @@ export type KpiResult = {
     assumptions: string[]
     transactionCount: number
 }
+
+export type SupportedKpiKey = keyof KpiResult['metrics']
+
+export type OrganisationKpi = {
+    id: string
+    organisations_id: string
+    key: SupportedKpiKey
+    name: string
+    is_active: boolean
+    created_at: string
+    updated_at: string
+}
+
+export type KpiValue = {
+    id: string
+    organisations_id: string
+    department_id: string | null
+    kpi_key: SupportedKpiKey
+    period_type: 'month'
+    period_start: string
+    period_end: string
+    value: number | null
+    unit: KpiMetric['unit']
+    available: boolean
+    reason: string | null
+    source_transaction_count: number
+    calculated_at: string
+    created_at: string
+    updated_at: string
+}

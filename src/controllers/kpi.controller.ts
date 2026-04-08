@@ -1,22 +1,9 @@
 import { Request, Response } from 'express'
-import { calculateKpis } from '../services/kpi.service'
+import { calculateInclusiveDays, calculateKpis, shiftDateByDays } from '../services/kpi.service'
 import { getTransactionsForKpi } from '../services/transaction.service'
-import { validateKpiQuery } from '../validators/kpi.validator'
-
-const calculateInclusiveDays = (from: string, to: string) => {
-    const fromDate = new Date(`${from}T00:00:00Z`)
-    const toDate = new Date(`${to}T00:00:00Z`)
-    const millisecondsPerDay = 1000 * 60 * 60 * 24
-
-
-    return Math.floor((toDate.getTime() - fromDate.getTime()) / millisecondsPerDay) + 1
-}
-
-const shiftDateByDays = (date: string, days: number) => {
-    const shifted = new Date(`${date}T00:00:00Z`)
-    shifted.setUTCDate(shifted.getUTCDate() + days)
-    return shifted.toISOString().slice(0, 10)
-}
+import { getKpiHistory, recalculateKpiRange } from '../services/kpi-value.service'
+import { getTrackedKpis, listAvailableKpis, replaceTrackedKpis } from '../services/organisation-kpi.service'
+import { validateKpiHistoryQuery, validateKpiQuery, validateTrackedKpisBody } from '../validators/kpi.validator'
 
 export const getKpisController = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -26,6 +13,53 @@ export const getKpisController = async (req: Request, res: Response): Promise<vo
         const transactions = await getTransactionsForKpi(req.userProfile!.organisations_id, queryFrom, to)
         const data = calculateKpis(transactions, from, to)
 
+        res.status(200).json({ success: true, data })
+    } catch (error) {
+        res.status(400).json({ success: false, error: (error as Error).message })
+    }
+}
+
+export const getAvailableKpisController = async (_req: Request, res: Response): Promise<void> => {
+    try {
+        res.status(200).json({ success: true, data: listAvailableKpis() })
+    } catch (error) {
+        res.status(400).json({ success: false, error: (error as Error).message })
+    }
+}
+
+export const getTrackedKpisController = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const data = await getTrackedKpis(req.userProfile!.organisations_id)
+        res.status(200).json({ success: true, data })
+    } catch (error) {
+        res.status(400).json({ success: false, error: (error as Error).message })
+    }
+}
+
+export const replaceTrackedKpisController = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { kpiKeys } = validateTrackedKpisBody(req.body)
+        const data = await replaceTrackedKpis(req.userProfile!.organisations_id, kpiKeys)
+        res.status(200).json({ success: true, data })
+    } catch (error) {
+        res.status(400).json({ success: false, error: (error as Error).message })
+    }
+}
+
+export const getKpiHistoryController = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { kpiKey, from, to } = validateKpiHistoryQuery(req.query)
+        const data = await getKpiHistory(req.userProfile!.organisations_id, kpiKey, from, to)
+        res.status(200).json({ success: true, data })
+    } catch (error) {
+        res.status(400).json({ success: false, error: (error as Error).message })
+    }
+}
+
+export const rebuildKpisController = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { from, to } = validateKpiQuery(req.body)
+        const data = await recalculateKpiRange(req.userProfile!.organisations_id, from, to)
         res.status(200).json({ success: true, data })
     } catch (error) {
         res.status(400).json({ success: false, error: (error as Error).message })

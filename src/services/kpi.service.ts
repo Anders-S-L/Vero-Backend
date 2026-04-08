@@ -1,4 +1,20 @@
-import { KpiMetric, KpiResult, Transaction } from '../types'
+import { KpiMetric, KpiResult, SupportedKpiKey, Transaction } from '../types'
+
+export const KPI_DEFINITIONS: Record<SupportedKpiKey, { name: string; unit: KpiMetric['unit'] }> = {
+    revenue: { name: 'Omsætning', unit: 'currency' },
+    variableCosts: { name: 'Variable Costs', unit: 'currency' },
+    contributionMargin: { name: 'Contribution Margin', unit: 'currency' },
+    grossProfit: { name: 'Gross Profit', unit: 'currency' },
+    monthlyGrowthRate: { name: 'Monthly Growth Rate', unit: 'percentage' },
+    bruttofortjeneste: { name: 'Bruttofortjeneste', unit: 'currency' },
+    grossMargin: { name: 'Bruttomargin (%)', unit: 'percentage' },
+    ebitda: { name: 'EBITDA', unit: 'currency' },
+    netResult: { name: 'Nettoresultat', unit: 'currency' },
+    cashFlow: { name: 'Cash Flow', unit: 'currency' },
+    liquidityRatio: { name: 'Likviditetsgrad', unit: 'ratio' },
+    burnRate: { name: 'Burn Rate', unit: 'currency' },
+    debtorDays: { name: 'Debitor­dage', unit: 'days' },
+}
 
 // Normaliserer kategori-typen, så sammenligninger ikke afhænger af whitespace eller store bogstaver.
 const normalizeCategoryType = (value?: string | null) => {
@@ -32,7 +48,7 @@ const buildMetric = (
 })
 
 // Periodens længde bruges både til burn rate og til at finde sammenligningsperioden.
-const calculateInclusiveDays = (from: string, to: string) => {
+export const calculateInclusiveDays = (from: string, to: string) => {
     const fromDate = new Date(`${from}T00:00:00Z`)
     const toDate = new Date(`${to}T00:00:00Z`)
     const millisecondsPerDay = 1000 * 60 * 60 * 24
@@ -41,18 +57,19 @@ const calculateInclusiveDays = (from: string, to: string) => {
 }
 
 // Flytter en ISO-dato et antal dage frem eller tilbage uden at ændre formatet.
-const shiftDateByDays = (date: string, days: number) => {
+export const shiftDateByDays = (date: string, days: number) => {
     const shifted = new Date(`${date}T00:00:00Z`)
     shifted.setUTCDate(shifted.getUTCDate() + days)
     return shifted.toISOString().slice(0, 10)
 }
 
 export const calculateKpis = (transactions: Transaction[], from: string, to: string): KpiResult => {
+    const currentPeriodTransactions = transactions.filter((transaction) => transaction.date >= from && transaction.date <= to)
     // Grundtal ud fra de kategori-typer, datamodellen understøtter lige nu.
-    const revenue = sumByCategoryTypes(transactions, ['income'])
-    const operatingExpenses = sumByCategoryTypes(transactions, ['expense'])
-    const taxes = sumByCategoryTypes(transactions, ['tax'])
-    const depreciation = sumByCategoryTypes(transactions, ['depreciation'])
+    const revenue = sumByCategoryTypes(currentPeriodTransactions, ['income'])
+    const operatingExpenses = sumByCategoryTypes(currentPeriodTransactions, ['expense'])
+    const taxes = sumByCategoryTypes(currentPeriodTransactions, ['tax'])
+    const depreciation = sumByCategoryTypes(currentPeriodTransactions, ['depreciation'])
     const totalExpenses = operatingExpenses + taxes + depreciation
     const cashInflows = revenue
     const cashOutflows = operatingExpenses + taxes
@@ -60,14 +77,14 @@ export const calculateKpis = (transactions: Transaction[], from: string, to: str
     const burnRate = periodDays > 0 ? (cashOutflows / periodDays) * 30.4375 : null
     const previousFrom = shiftDateByDays(from, -periodDays)
     const previousTo = shiftDateByDays(from, -1)
+    const previousPeriodTransactions = transactions.filter(
+        (transaction) => transaction.date >= previousFrom && transaction.date <= previousTo,
+    )
     const previousRevenue = sumByCategoryTypes(
-        transactions.filter((transaction) => transaction.date >= previousFrom && transaction.date <= previousTo),
+        previousPeriodTransactions,
         ['income'],
     )
-    const currentRevenue = sumByCategoryTypes(
-        transactions.filter((transaction) => transaction.date >= from && transaction.date <= to),
-        ['income'],
-    )
+    const currentRevenue = sumByCategoryTypes(currentPeriodTransactions, ['income'])
     // Sammenligner omsætningen med perioden umiddelbart før med samme længde.
     const monthlyGrowthRate =
         previousRevenue === 0
@@ -136,6 +153,6 @@ export const calculateKpis = (transactions: Transaction[], from: string, to: str
             'Cash Flow og Burn Rate behandler afskrivninger som ikke-kontante poster.',
             'Monthly Growth Rate sammenligner omsætning med den umiddelbart foregående periode af samme længde.',
         ],
-        transactionCount: transactions.length,
+        transactionCount: currentPeriodTransactions.length,
     }
 }
