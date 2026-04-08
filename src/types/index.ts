@@ -30,6 +30,9 @@ export type TransactionCategory = {
     id: string
     name: string
     type: string
+    statement_section: string | null
+    cost_behavior: string | null
+    is_cash: boolean
 }
 
 // Transaction bruges i KPI-flowet med en joinet kategori, så beregningen kan læse category.type.
