@@ -1,141 +1,113 @@
-import { KpiMetric, KpiResult, Transaction } from '../types'
+import { supabaseAdmin } from '../lib/supabase'
 
-// Normaliserer kategori-typen, så sammenligninger ikke afhænger af whitespace eller store bogstaver.
-const normalizeCategoryType = (value?: string | null) => {
-    return (value ?? '').trim().toLowerCase()
+interface Transaction {
+    amount: number
+    date: string
+    categories: {
+        type: string
+        statement_section: string | null
+        cost_behavior: string | null
+        is_cash: boolean
+    } | null
 }
 
-// Summerer alle transaktioner, hvor den joinede kategori matcher en eller flere ønskede typer.
-const sumByCategoryTypes = (transactions: Transaction[], categoryTypes: string[]) => {
-    const expected = new Set(categoryTypes)
+const getTransactions = async (
+    organisationsId: string,
+    from?: string,
+    to?: string
+): Promise<Transaction[]> => {
+    let query = supabaseAdmin
+        .from('transactions')
+        .select('amount, date, categories(type, statement_section, cost_behavior, is_cash)')
+        .eq('organisations_id', organisationsId)
+        .eq('is_deleted', false)
 
-    return transactions.reduce((sum, transaction) => {
-        const normalizedType = normalizeCategoryType(transaction.category?.type)
-        if (!expected.has(normalizedType)) return sum
-        return sum + Number(transaction.amount)
-    }, 0)
+    if (from) query = query.gte('date', from)
+    if (to) query = query.lte('date', to)
+
+    const { data, error } = await query
+    if (error) throw new Error(error.message)
+    return (data as unknown as Transaction[]) ?? []
 }
 
-// Ensartet struktur for alle KPI-metrics i API-responsen.
-const buildMetric = (
-    label: string,
-    unit: KpiMetric['unit'],
-    value: number | null,
-    available: boolean,
-    reason?: string,
-): KpiMetric => ({
-    label,
-    value,
-    unit,
-    available,
-    reason,
-})
+export const calculateKPIs = async (
+    organisationsId: string,
+    from?: string,
+    to?: string
+) => {
+    const transactions = await getTransactions(organisationsId, from, to)
 
-// Periodens længde bruges både til burn rate og til at finde sammenligningsperioden.
-const calculateInclusiveDays = (from: string, to: string) => {
-    const fromDate = new Date(`${from}T00:00:00Z`)
-    const toDate = new Date(`${to}T00:00:00Z`)
-    const millisecondsPerDay = 1000 * 60 * 60 * 24
+    const sum = (txs: Transaction[]) =>
+        txs.reduce((acc, t) => acc + Number(t.amount), 0)
 
-    return Math.floor((toDate.getTime() - fromDate.getTime()) / millisecondsPerDay) + 1
-}
+    const bySection = (section: string) =>
+        transactions.filter(t => t.categories?.statement_section === section)
 
-// Flytter en ISO-dato et antal dage frem eller tilbage uden at ændre formatet.
-const shiftDateByDays = (date: string, days: number) => {
-    const shifted = new Date(`${date}T00:00:00Z`)
-    shifted.setUTCDate(shifted.getUTCDate() + days)
-    return shifted.toISOString().slice(0, 10)
-}
+    const byCostBehavior = (behavior: string) =>
+        transactions.filter(t => t.categories?.cost_behavior === behavior)
 
-export const calculateKpis = (transactions: Transaction[], from: string, to: string): KpiResult => {
-    // Grundtal ud fra de kategori-typer, datamodellen understøtter lige nu.
-    const revenue = sumByCategoryTypes(transactions, ['income'])
-    const operatingExpenses = sumByCategoryTypes(transactions, ['expense'])
-    const taxes = sumByCategoryTypes(transactions, ['tax'])
-    const depreciation = sumByCategoryTypes(transactions, ['depreciation'])
-    const totalExpenses = operatingExpenses + taxes + depreciation
-    const cashInflows = revenue
-    const cashOutflows = operatingExpenses + taxes
-    const periodDays = calculateInclusiveDays(from, to)
-    const burnRate = periodDays > 0 ? (cashOutflows / periodDays) * 30.4375 : null
-    const previousFrom = shiftDateByDays(from, -periodDays)
-    const previousTo = shiftDateByDays(from, -1)
-    const previousRevenue = sumByCategoryTypes(
-        transactions.filter((transaction) => transaction.date >= previousFrom && transaction.date <= previousTo),
-        ['income'],
-    )
-    const currentRevenue = sumByCategoryTypes(
-        transactions.filter((transaction) => transaction.date >= from && transaction.date <= to),
-        ['income'],
-    )
-    // Sammenligner omsætningen med perioden umiddelbart før med samme længde.
-    const monthlyGrowthRate =
-        previousRevenue === 0
-            ? null
-            : ((currentRevenue - previousRevenue) / previousRevenue) * 100
+    // ── Core KPIs ─────────────────────────────────────────────
+    const revenue      = sum(transactions.filter(t => t.categories?.type === 'income'))
+    const allExpenses  = Math.abs(sum(transactions.filter(t => t.categories?.type === 'expense')))
+    const taxAmount    = Math.abs(sum(transactions.filter(t => t.categories?.type === 'tax')))
+    const depreciation = Math.abs(sum(transactions.filter(t => t.categories?.type === 'depreciation')))
+    const cashInflows  = sum(transactions.filter(t => t.categories?.is_cash && t.amount > 0))
+    const cashOutflows = sum(transactions.filter(t => t.categories?.is_cash && t.amount < 0))
 
-    // De følgende KPI'er kan ikke beregnes korrekt endnu, fordi databasen ikke skelner COGS/variable costs ud.
-    const unavailableVariableCostReason = 'Kræver en særskilt kategori for variable costs eller COGS/vareforbrug, som datamodellen ikke har endnu.'
-    const unavailableZeroRevenueReason = 'Kan ikke beregnes når omsætning er 0 i perioden.'
+    const ebitda    = revenue - allExpenses
+    const netResult = ebitda - taxAmount - depreciation
+    const cashFlow  = cashInflows + cashOutflows
+    const burnRate  = Math.abs(Math.min(cashFlow, 0))
 
-    const grossMargin =
-        revenue === 0
-            ? buildMetric('Bruttomargin (%)', 'percentage', null, false, unavailableZeroRevenueReason)
-            : buildMetric('Bruttomargin (%)', 'percentage', null, false, unavailableVariableCostReason)
+    // ── Monthly growth rate ────────────────────────────────────
+    const byMonth: Record<string, number> = {}
+    for (const t of transactions) {
+        const month = t.date.slice(0, 7)
+        byMonth[month] = (byMonth[month] ?? 0) + Number(t.amount)
+    }
+    const months = Object.keys(byMonth).sort()
+    let monthlyGrowthRate: number | null = null
+    if (months.length >= 2) {
+        const prev = byMonth[months[months.length - 2]]
+        const curr = byMonth[months[months.length - 1]]
+        monthlyGrowthRate = prev !== 0 ? ((curr - prev) / Math.abs(prev)) * 100 : null
+    }
+
+    // ── Enhanced KPIs (needs statement_section + cost_behavior) ─
+    const cogsAmount    = Math.abs(sum(bySection('cogs')))
+    const variableCosts = Math.abs(sum(byCostBehavior('variable')))
+
+    const grossProfit    = revenue - cogsAmount
+    const grossMargin    = revenue !== 0 ? (grossProfit / revenue) * 100 : null
+    const contributionMargin = revenue - variableCosts
+    const contributionMarginRatio = revenue !== 0
+        ? (contributionMargin / revenue) * 100
+        : null
+
+    // ── Balance KPIs (needs balance_asset / balance_liability) ──
+    const currentAssets      = sum(bySection('balance_asset'))
+    const currentLiabilities = Math.abs(sum(bySection('balance_liability')))
+    const liquidityRatio     = currentLiabilities !== 0
+        ? currentAssets / currentLiabilities
+        : null
 
     return {
-        period: { from, to },
-        metrics: {
-            // KPI'er der kan beregnes korrekt med nuværende kategori-typer.
-            revenue: buildMetric('Omsætning', 'currency', revenue, true),
-            variableCosts: buildMetric('Variable Costs', 'currency', null, false, unavailableVariableCostReason),
-            contributionMargin: buildMetric('Contribution Margin', 'currency', null, false, unavailableVariableCostReason),
-            grossProfit: buildMetric('Gross Profit', 'currency', null, false, unavailableVariableCostReason),
-            monthlyGrowthRate: buildMetric(
-                'Monthly Growth Rate',
-                'percentage',
-                monthlyGrowthRate,
-                monthlyGrowthRate !== null,
-                monthlyGrowthRate === null ? 'Kræver omsætning i den foregående sammenligningsperiode.' : undefined,
-            ),
-            bruttofortjeneste: buildMetric('Bruttofortjeneste', 'currency', null, false, unavailableVariableCostReason),
-            grossMargin,
-            ebitda: buildMetric('EBITDA', 'currency', revenue - operatingExpenses, true),
-            netResult: buildMetric('Nettoresultat', 'currency', revenue - totalExpenses, true),
-            cashFlow: buildMetric('Cash Flow', 'currency', cashInflows - cashOutflows, true),
-            // Balancebaserede KPI'er kræver data, som endnu ikke findes i modellen.
-            liquidityRatio: buildMetric(
-                'Likviditetsgrad',
-                'ratio',
-                null,
-                false,
-                'Kræver balance-data for omsætningsaktiver og kortfristet gæld, ikke kun transaktioner.',
-            ),
-            burnRate: buildMetric(
-                'Burn Rate',
-                'currency',
-                burnRate,
-                true,
-                'Beregnet som månedliggjorte kontante udgifter i perioden. Afskrivninger indgår ikke.',
-            ),
-            debtorDays: buildMetric(
-                'Debitor­dage',
-                'days',
-                null,
-                false,
-                'Kræver saldo på tilgodehavender ved periodens slutning, ikke kun transaktioner.',
-            ),
+        revenue,
+        ebitda,
+        netResult,
+        cashFlow,
+        burnRate,
+        monthlyGrowthRate,
+        grossProfit,
+        grossMargin,
+        contributionMargin,
+        contributionMarginRatio,
+        variableCosts,
+        liquidityRatio,
+        debtorDays: null,
+        _meta: {
+            transactionCount: transactions.length,
+            period: { from: from ?? null, to: to ?? null },
         },
-        // Gør det tydeligt for frontend og andre udviklere, hvilke faglige antagelser beregningen bygger på.
-        assumptions: [
-            'KPIer beregnes ud fra transaktioner i den valgte periode.',
-            'Omsætning hentes fra kategorier med type income.',
-            'Driftsomkostninger hentes fra kategorier med type expense.',
-            'Skat hentes fra kategorier med type tax.',
-            'Afskrivninger hentes fra kategorier med type depreciation.',
-            'Cash Flow og Burn Rate behandler afskrivninger som ikke-kontante poster.',
-            'Monthly Growth Rate sammenligner omsætning med den umiddelbart foregående periode af samme længde.',
-        ],
-        transactionCount: transactions.length,
     }
 }
