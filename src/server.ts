@@ -4,6 +4,7 @@ import cors from 'cors'
 import authRouter from './routes/auth.routes'
 import departmentRouter from './routes/department.routes'
 import categoryRouter from './routes/category.routes'
+import kpiRouter from './routes/kpi.routes'
 import transactionRouter from './routes/transaction.routes'
 
 const app = express()
@@ -19,6 +20,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authRouter)
 app.use('/api/departments', departmentRouter)
 app.use('/api/categories', categoryRouter)
+app.use('/api/kpis', kpiRouter)
 app.use('/api/transactions', transactionRouter)
 
 app.listen(Number(PORT), '0.0.0.0', () => {
