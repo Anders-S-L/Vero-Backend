@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { createCategoryService, getCategoriesService } from '../services/category.service'
+import { createCategoryService, deleteCategoryService, getCategoriesService, updateCategoryService } from '../services/category.service'
 
 export const createCategory = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -20,6 +20,30 @@ export const getCategories = async (req: Request, res: Response): Promise<void> 
         const departmentId = req.query.department_id as string | undefined
         const data = await getCategoriesService(req.userProfile!.organisations_id, departmentId)
         res.status(200).json({ success: true, data })
+    } catch (error) {
+        res.status(400).json({ success: false, error: (error as Error).message })
+    }
+}
+
+export const updateCategory = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params
+        const { name, type } = req.body as {
+            name: string
+            type: string
+        }
+        const data = await updateCategoryService(req.userProfile!.organisations_id, id, name, type)
+        res.status(200).json({ success: true, data })
+    } catch (error) {
+        res.status(400).json({ success: false, error: (error as Error).message })
+    }
+}
+
+export const deleteCategory = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params
+        await deleteCategoryService(req.userProfile!.organisations_id, id)
+        res.status(200).json({ success: true })
     } catch (error) {
         res.status(400).json({ success: false, error: (error as Error).message })
     }
