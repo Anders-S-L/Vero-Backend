@@ -1,5 +1,5 @@
 import { KpiMetric, KpiResult, SupportedKpiKey, Transaction } from '../types'
-
+// udregner KPIér ud fra transaktioner
 export const KPI_DEFINITIONS: Record<SupportedKpiKey, { name: string; unit: KpiMetric['unit'] }> = {
     revenue: { name: 'Omsætning', unit: 'currency' },
     variableCosts: { name: 'Variable Costs', unit: 'currency' },

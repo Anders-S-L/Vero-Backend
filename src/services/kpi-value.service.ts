@@ -2,7 +2,7 @@ import { supabaseAdmin } from '../lib/supabase'
 import { calculateInclusiveDays, calculateKpis, shiftDateByDays } from './kpi.service'
 import { getTrackedKpis } from './organisation-kpi.service'
 import { KpiResult, KpiValue, SupportedKpiKey, Transaction } from '../types'
-
+// Håndtere det gemte KPI-resultat over tid, inklusive genberegning og historik.
 const getMonthBounds = (date: string) => {
     const parsed = new Date(`${date}T00:00:00Z`)
     const year = parsed.getUTCFullYear()

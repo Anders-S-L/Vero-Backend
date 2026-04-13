@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '../lib/supabase'
 import { KPI_DEFINITIONS } from './kpi.service'
 import { OrganisationKpi, SupportedKpiKey } from '../types'
-
+// håndtere hvilke kpiér en virksomhed har valgt at følge
 export const listAvailableKpis = () => {
     return Object.entries(KPI_DEFINITIONS).map(([key, definition]) => ({
         key: key as SupportedKpiKey,
