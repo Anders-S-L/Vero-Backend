@@ -18,6 +18,14 @@ type InviterProfile = {
     is_active: boolean
 }
 
+const getInviteRedirectTo = () => {
+    const inviteRedirectUrl = process.env.INVITE_REDIRECT_URL?.trim()
+
+    if (!inviteRedirectUrl) return undefined
+
+    return inviteRedirectUrl
+}
+
 const findAuthUserByEmail = async (email: string) => {
     let page = 1
     const perPage = 200
@@ -147,6 +155,7 @@ export const inviteEmployeeToOrganization = async (inviterId: string, input: Inv
     }
 
     const inviteResult = await supabaseAdmin.auth.admin.inviteUserByEmail(input.email, {
+        redirectTo: getInviteRedirectTo(),
         data: {
             full_name: input.fullName,
             role: input.role,
@@ -165,7 +174,7 @@ export const inviteEmployeeToOrganization = async (inviterId: string, input: Inv
         organisations_id: inviter.organisations_id,
         full_name: input.fullName,
         role: input.role,
-        is_active: false,
+        is_active: true,
         invited_by: inviter.id,
     })
 
@@ -207,9 +216,22 @@ export const loginWithEmailPassword = async (input: LoginRequest) => {
     }
     const { data: profile } = await supabaseAdmin
         .from('profiles')
-        .select('full_name, role, organisations_id')
+        .select('full_name, role, organisations_id, is_active')
         .eq('id', loginResult.data.user.id)
         .single()
+
+    if (profile && !profile.is_active) {
+        const { error: activationError } = await supabaseAdmin
+            .from('profiles')
+            .update({ is_active: true })
+            .eq('id', loginResult.data.user.id)
+
+        if (activationError) {
+            throw new Error('Kunne ikke aktivere brugerprofil ved første login.')
+        }
+
+        profile.is_active = true
+    }
 
     const { data: organisation } = await supabaseAdmin
         .from('organisations')
