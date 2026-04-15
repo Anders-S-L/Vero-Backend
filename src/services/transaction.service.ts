@@ -55,7 +55,7 @@ export const getTransactionsForKpi = async (
     const { data, error } = await supabaseAdmin
         .from('transactions')
         .select(
-            'id, organisations_id, category_id, amount, date, description, created_at, category:categories!inner(id, name, type)',
+            'id, organisations_id, category_id, amount, date, description, created_at, category:categories!inner(id, name, type, statement_section, cost_behavior, is_cash)',
         )
         .eq('organisations_id', organisationId)
         .eq('is_deleted', false)
