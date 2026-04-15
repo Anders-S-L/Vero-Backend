@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '../lib/supabase'
-import { LoginRequest } from '../types/index'
+import { InviteEmployeeRequest, LoginRequest } from '../types/index'
 
 type RegisterOwnerInput = {
     email: string
@@ -9,6 +9,42 @@ type RegisterOwnerInput = {
     cvr?: string
     currency: string
     fiscalYearStart: number
+}
+
+type InviterProfile = {
+    id: string
+    organisations_id: string
+    role: 'admin' | 'manager' | 'employee' | 'auditor'
+    is_active: boolean
+}
+
+const findAuthUserByEmail = async (email: string) => {
+    let page = 1
+    const perPage = 200
+
+    while (page <= 50) {
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage })
+
+        if (error) throw new Error('Kunne ikke slå bruger op via email.')
+
+        const users = data.users || []
+        const matchedUser = users.find((user) => user.email?.toLowerCase() === email.toLowerCase())
+
+        if (matchedUser) return matchedUser
+        if (users.length < perPage) break
+
+        page += 1
+    }
+
+    return null
+}
+
+const validateInvitePermissions = (inviter: InviterProfile, invitedRole: InviteEmployeeRequest['role']) => {
+    if (inviter.role === 'admin') return
+
+    if (inviter.role === 'manager' && invitedRole === 'employee') return
+
+    throw new Error('Du har ikke rettigheder til at invitere denne rolle.')
 }
 
 export const registerOwnerWithOrganization = async (input: RegisterOwnerInput) => {
@@ -64,6 +100,99 @@ export const registerOwnerWithOrganization = async (input: RegisterOwnerInput) =
         userId,
         organisationId,
         role: 'admin' as const,
+    }
+}
+
+export const inviteEmployeeToOrganization = async (inviterId: string, input: InviteEmployeeRequest) => {
+    const { data: inviter, error: inviterError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, organisations_id, role, is_active')
+        .eq('id', inviterId)
+        .single<InviterProfile>()
+
+    if (inviterError || !inviter || !inviter.is_active) {
+        throw new Error('Kunne ikke validere inviterende bruger.')
+    }
+
+    validateInvitePermissions(inviter, input.role)
+
+    const { data: department, error: departmentError } = await supabaseAdmin
+        .from('departments')
+        .select('id')
+        .eq('id', input.departmentId)
+        .eq('organisations_id', inviter.organisations_id)
+        .eq('is_active', true)
+        .maybeSingle()
+
+    if (departmentError || !department) {
+        throw new Error('Valgt afdeling findes ikke i organisationen.')
+    }
+
+    const existingAuthUser = await findAuthUserByEmail(input.email)
+
+    if (existingAuthUser) {
+        const { data: existingProfile } = await supabaseAdmin
+            .from('profiles')
+            .select('id, organisations_id')
+            .eq('id', existingAuthUser.id)
+            .maybeSingle()
+
+        if (existingProfile?.organisations_id === inviter.organisations_id) {
+            throw new Error('Denne bruger eksisterer i organisationen.')
+        }
+
+        if (existingProfile && existingProfile.organisations_id !== inviter.organisations_id) {
+            throw new Error('Brugeren er allerede tilknyttet en anden organisation.')
+        }
+    }
+
+    const inviteResult = await supabaseAdmin.auth.admin.inviteUserByEmail(input.email, {
+        data: {
+            full_name: input.fullName,
+            role: input.role,
+            department_id: input.departmentId,
+        },
+    })
+
+    if (inviteResult.error || !inviteResult.data.user) {
+        throw new Error(inviteResult.error?.message || 'Kunne ikke sende invitation.')
+    }
+
+    const invitedUserId = inviteResult.data.user.id
+
+    const { error: profileError } = await supabaseAdmin.from('profiles').insert({
+        id: invitedUserId,
+        organisations_id: inviter.organisations_id,
+        full_name: input.fullName,
+        role: input.role,
+        is_active: false,
+        invited_by: inviter.id,
+    })
+
+    if (profileError) {
+        await supabaseAdmin.auth.admin.deleteUser(invitedUserId)
+        throw new Error(profileError.message || 'Kunne ikke oprette pending profil.')
+    }
+
+    const { error: accessError } = await supabaseAdmin.from('profile_department_access').insert({
+        profile_id: invitedUserId,
+        department_id: input.departmentId,
+        granted_by: inviter.id,
+    })
+
+    if (accessError) {
+        await supabaseAdmin.from('profiles').delete().eq('id', invitedUserId)
+        await supabaseAdmin.auth.admin.deleteUser(invitedUserId)
+        throw new Error(accessError.message || 'Kunne ikke tilknytte afdeling til inviteret bruger.')
+    }
+
+    return {
+        userId: invitedUserId,
+        email: input.email,
+        fullName: input.fullName,
+        role: input.role,
+        departmentId: input.departmentId,
+        status: 'pending' as const,
     }
 }
 

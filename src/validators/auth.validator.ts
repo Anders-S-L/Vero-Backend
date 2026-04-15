@@ -1,9 +1,11 @@
-import { LoginRequest, RegisterOwnerRequest } from '../types'
+import { InviteEmployeeRequest, LoginRequest, RegisterOwnerRequest } from '../types'
 
 const isValidEmail = (email: string): boolean => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
-
+const isUuid = (value: string): boolean => {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
 export const validateRegisterOwnerInput = (payload: unknown): RegisterOwnerRequest => {
     if (!payload || typeof payload !== 'object') {
         throw new Error('Body skal være et JSON objekt.')
@@ -56,6 +58,36 @@ export const validateRegisterOwnerInput = (payload: unknown): RegisterOwnerReque
         cvr: cvr?.trim() || undefined,
         currency: currency.trim().toUpperCase(),
         fiscalYearStart,
+    }
+}
+export const validateInviteEmployeeInput = (payload: unknown): InviteEmployeeRequest => {
+    if (!payload || typeof payload !== 'object') {
+        throw new Error('Body skal være et JSON objekt.')
+    }
+
+    const { email, fullName, role, departmentId } = payload as Partial<InviteEmployeeRequest>
+
+    if (!email || !isValidEmail(email)) {
+        throw new Error('Ugyldig email.')
+    }
+
+    if (!fullName || fullName.trim().length < 2) {
+        throw new Error('fullName skal være mindst 2 tegn.')
+    }
+
+    if (!role || !['manager', 'employee', 'auditor'].includes(role)) {
+        throw new Error('role skal være manager, employee eller auditor.')
+    }
+
+    if (!departmentId || !isUuid(departmentId)) {
+        throw new Error('departmentId skal være et gyldigt UUID.')
+    }
+
+    return {
+        email: email.trim().toLowerCase(),
+        fullName: fullName.trim(),
+        role,
+        departmentId,
     }
 }
 

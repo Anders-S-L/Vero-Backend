@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express'
-import { validateRegisterOwnerInput, validateLoginInput } from '../validators/auth.validator'
+import { validateInviteEmployeeInput, validateRegisterOwnerInput, validateLoginInput } from '../validators/auth.validator'
 
 export const validateRegisterOwnerMiddleware = (
     req: Request,
@@ -8,6 +8,20 @@ export const validateRegisterOwnerMiddleware = (
 ): void => {
     try {
         req.body = validateRegisterOwnerInput(req.body)
+        next()
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ugyldig request body.'
+        res.status(400).json({ success: false, error: message })
+    }
+}
+
+export const validateInviteEmployeeMiddleware = (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+): void => {
+    try {
+        req.body = validateInviteEmployeeInput(req.body)
         next()
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Ugyldig request body.'

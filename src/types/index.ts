@@ -21,6 +21,15 @@ export type RegisterOwnerResult = {
     role: 'admin'
 }
 
+export type InviteRole = 'manager' | 'employee' | 'auditor'
+
+export type InviteEmployeeRequest = {
+    email: string
+    fullName: string
+    role: InviteRole
+    departmentId: string
+}
+
 export type LoginRequest = {
     email: string
     password: string
