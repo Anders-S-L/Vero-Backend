@@ -37,6 +37,25 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     next()
 }
 
+export const requireActiveProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const { data: profile, error } = await supabaseAdmin
+        .from('profiles')
+        .select('id, organisations_id, role, is_active')
+        .eq('id', req.user!.id)
+        .single()
+
+    console.log('profile:', profile)
+    console.log('error:', error)
+
+    if (error || !profile || !profile.is_active) {
+        res.status(403).json({ success: false, error: 'Adgang nægtet.' })
+        return
+    }
+
+    req.userProfile = profile
+    next()
+}
+
 export const requireAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
 
     const { data: profile, error } = await supabaseAdmin

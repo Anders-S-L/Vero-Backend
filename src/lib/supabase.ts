@@ -16,3 +16,13 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
         schema: 'public',
     }
 })
+
+export const createSupabaseAuthClient = () => createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+    },
+    db: {
+        schema: 'public',
+    },
+})

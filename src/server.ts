@@ -5,6 +5,7 @@ import authRouter from './routes/auth.routes'
 import departmentRouter from './routes/department.routes'
 import categoryRouter from './routes/category.routes'
 import kpiRouter from './routes/kpi.routes'
+import kpiFavoriteRouter from './routes/kpi-favorite.routes'
 import transactionRouter from './routes/transaction.routes'
 import profileRouter from './routes/profile.routes'
 
@@ -22,6 +23,7 @@ app.use('/api/auth', authRouter)
 app.use('/api/departments', departmentRouter)
 app.use('/api/categories', categoryRouter)
 app.use('/api/kpis', kpiRouter)
+app.use('/api/kpi-favorites', kpiFavoriteRouter)
 app.use('/api/transactions', transactionRouter)
 app.use('/api/profiles', profileRouter)
 

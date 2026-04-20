@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../lib/supabase'
+import { createSupabaseAuthClient, supabaseAdmin } from '../lib/supabase'
 import { InviteEmployeeRequest, LoginRequest } from '../types/index'
 
 type RegisterOwnerInput = {
@@ -206,7 +206,8 @@ export const inviteEmployeeToOrganization = async (inviterId: string, input: Inv
 }
 
 export const loginWithEmailPassword = async (input: LoginRequest) => {
-    const loginResult = await supabaseAdmin.auth.signInWithPassword({
+    const supabaseAuth = createSupabaseAuthClient()
+    const loginResult = await supabaseAuth.auth.signInWithPassword({
         email: input.email,
         password: input.password,
     })
