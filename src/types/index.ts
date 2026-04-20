@@ -63,6 +63,8 @@ export type KpiMetric = {
     unit: 'currency' | 'percentage' | 'days' | 'ratio'
     available: boolean
     reason?: string
+    definition: string
+    calculationExample: string[]
 }
 
 // Samlet response-model for GET /api/kpis.

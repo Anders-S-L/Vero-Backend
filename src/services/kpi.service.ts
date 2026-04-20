@@ -1,4 +1,5 @@
 import { KpiMetric, KpiResult, SupportedKpiKey, Transaction } from '../types'
+import { getKpiMetadata } from './kpi-metadata.service'
 
 export const KPI_DEFINITIONS: Record<SupportedKpiKey, { name: string; unit: KpiMetric['unit'] }> = {
     revenue: { name: 'Omsætning', unit: 'currency' },
@@ -30,18 +31,25 @@ const sumByCategoryTypes = (transactions: Transaction[], categoryTypes: string[]
 }
 
 const buildMetric = (
+    key: SupportedKpiKey,
     label: string,
     unit: KpiMetric['unit'],
     value: number | null,
     available: boolean,
     reason?: string,
-): KpiMetric => ({
-    label,
-    value,
-    unit,
-    available,
-    reason,
-})
+): KpiMetric => {
+    const metadata = getKpiMetadata(key)
+
+    return {
+        label,
+        value,
+        unit,
+        available,
+        reason,
+        definition: metadata.definition,
+        calculationExample: metadata.calculationExample,
+    }
+}
 
 export const calculateInclusiveDays = (from: string, to: string) => {
     const fromDate = new Date(`${from}T00:00:00Z`)
@@ -105,49 +113,52 @@ export const calculateKpis = (transactions: Transaction[], from: string, to: str
     return {
         period: { from, to },
         metrics: {
-            revenue: buildMetric('Omsætning', 'currency', revenue, true),
-            variableCosts: buildMetric('Variable Costs', 'currency',
+            revenue: buildMetric('revenue', 'Omsætning', 'currency', revenue, true),
+            variableCosts: buildMetric('variableCosts', 'Variable Costs', 'currency',
                 hasVariableData ? Math.abs(variableCostsAmount) : null,
                 hasVariableData,
                 !hasVariableData ? unavailableVariableCostReason : undefined
             ),
-            contributionMargin: buildMetric('Contribution Margin', 'currency',
+            contributionMargin: buildMetric('contributionMargin', 'Contribution Margin', 'currency',
                 hasVariableData ? contributionMarginValue : null,
                 hasVariableData,
                 !hasVariableData ? unavailableVariableCostReason : undefined
             ),
-            grossProfit: buildMetric('Gross Profit', 'currency',
+            grossProfit: buildMetric('grossProfit', 'Gross Profit', 'currency',
                 hasCogsData ? grossProfitValue : null,
                 hasCogsData,
                 !hasCogsData ? unavailableVariableCostReason : undefined
             ),
             monthlyGrowthRate: buildMetric(
+                'monthlyGrowthRate',
                 'Monthly Growth Rate', 'percentage',
                 monthlyGrowthRate,
                 monthlyGrowthRate !== null,
                 monthlyGrowthRate === null ? 'Kræver omsætning i den foregående sammenligningsperiode.' : undefined,
             ),
-            bruttofortjeneste: buildMetric('Bruttofortjeneste', 'currency',
+            bruttofortjeneste: buildMetric('bruttofortjeneste', 'Bruttofortjeneste', 'currency',
                 hasCogsData ? grossProfitValue : null,
                 hasCogsData,
                 !hasCogsData ? unavailableVariableCostReason : undefined
             ),
-            grossMargin: buildMetric('Bruttomargin (%)', 'percentage',
+            grossMargin: buildMetric('grossMargin', 'Bruttomargin (%)', 'percentage',
                 hasCogsData && revenue !== 0 ? grossMarginValue : null,
                 hasCogsData && revenue !== 0,
                 !hasCogsData ? unavailableVariableCostReason : revenue === 0 ? unavailableZeroRevenueReason : undefined
             ),
-            ebitda: buildMetric('EBITDA', 'currency', revenue - operatingExpenses, true),
-            netResult: buildMetric('Nettoresultat', 'currency', revenue - totalExpenses, true),
-            cashFlow: buildMetric('Cash Flow', 'currency', cashInflows - cashOutflows, true),
+            ebitda: buildMetric('ebitda', 'EBITDA', 'currency', revenue - operatingExpenses, true),
+            netResult: buildMetric('netResult', 'Nettoresultat', 'currency', revenue - totalExpenses, true),
+            cashFlow: buildMetric('cashFlow', 'Cash Flow', 'currency', cashInflows - cashOutflows, true),
             liquidityRatio: buildMetric(
+                'liquidityRatio',
                 'Likviditetsgrad', 'ratio', null, false,
                 'Kræver balance-data for omsætningsaktiver og kortfristet gæld, ikke kun transaktioner.',
             ),
-            burnRate: buildMetric('Burn Rate', 'currency', burnRate, true,
+            burnRate: buildMetric('burnRate', 'Burn Rate', 'currency', burnRate, true,
                 'Beregnet som månedliggjorte kontante udgifter i perioden. Afskrivninger indgår ikke.',
             ),
             debtorDays: buildMetric(
+                'debtorDays',
                 'Debitordage', 'days', null, false,
                 'Kræver saldo på tilgodehavender ved periodens slutning, ikke kun transaktioner.',
             ),
