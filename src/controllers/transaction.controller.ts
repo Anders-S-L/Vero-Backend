@@ -4,8 +4,8 @@ import { validateCreateTransaction } from '../validators/transaction.validator'
 
 export const createTransactionController = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { amount, date, category_id, description } = validateCreateTransaction(req.body)
-        const data = await createTransaction(req.userProfile!.organisations_id, req.user!.id, amount, date, category_id, description)
+        const { amount, date, category_id, description, repeat_monthly, repeat_until } = validateCreateTransaction(req.body)
+        const data = await createTransaction(req.userProfile!.organisations_id, req.user!.id, amount, date, category_id, description, repeat_monthly, repeat_until)
         res.status(201).json({ success: true, data })
     } catch (error) {
         res.status(400).json({ success: false, error: (error as Error).message })

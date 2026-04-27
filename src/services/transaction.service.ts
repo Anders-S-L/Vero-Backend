@@ -2,19 +2,70 @@ import { supabaseAdmin } from '../lib/supabase'
 import { recalculateMonthlyKpis } from './kpi-value.service'
 import { Transaction } from '../types'
 
-export const createTransaction = async (organisationId: string, userId: string, amount: number, date: string, category_id: string, description: string | null) => {
+const addMonths = (isoDate: string, months: number) => {
+    const current = new Date(isoDate)
+    current.setMonth(current.getMonth() + months)
+    return current.toISOString().slice(0, 10)
+}
+
+const buildRecurringDates = (startDate: string, repeatUntil: string | null) => {
+    if (!repeatUntil) return [startDate]
+    const dates: string[] = []
+    let index = 0
+    let current = startDate
+
+    while (new Date(current) <= new Date(repeatUntil)) {
+        dates.push(current)
+        index += 1
+        current = addMonths(startDate, index)
+    }
+
+    return dates
+}
+
+export const createTransaction = async (
+    organisationId: string,
+    userId: string,
+    amount: number,
+    date: string,
+    category_id: string,
+    description: string | null,
+    repeatMonthly = false,
+    repeatUntil: string | null = null,
+) => {
+    const transactionDates = repeatMonthly ? buildRecurringDates(date, repeatUntil) : [date]
+    const rows = transactionDates.map((transactionDate) => ({
+        organisations_id: organisationId,
+        created_by: userId,
+        amount,
+        date: transactionDate,
+        category_id,
+        description,
+        is_deleted: false,
+    }))
+
     const { data, error } = await supabaseAdmin
         .from('transactions')
-        .insert({ organisations_id: organisationId, created_by: userId, amount, date, category_id, description, is_deleted: false })
+        .insert(rows)
         .select('id, organisations_id, category_id, amount, date, description, created_at')
-        .single()
+        .order('date', { ascending: true })
 
     console.log('transaction data:', data)
     console.log('transaction error:', error)
 
-    if (error || !data) throw new Error('Kunne ikke oprette transaktion.')
-    await recalculateMonthlyKpis(organisationId, date)
-    return data
+    if (error || !data || data.length === 0) throw new Error('Kunne ikke oprette transaktion.')
+
+    const uniqueMonths = Array.from(new Set(transactionDates.map((transactionDate) => transactionDate.slice(0, 7))))
+    await Promise.all(uniqueMonths.map((month) => recalculateMonthlyKpis(organisationId, `${month}-01`)))
+
+    if (!repeatMonthly) return data[0]
+
+    return {
+        recurring: true,
+        created_count: data.length,
+        repeat_until: repeatUntil,
+        transactions: data,
+    }
 }
 
 export const getTransactions = async (organisationId: string) => {
