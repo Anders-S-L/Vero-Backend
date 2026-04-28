@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../lib/supabase'
+import { db, supabaseAdmin } from '../lib/supabase'
 
 type AuthEmailById = Record<string, string>
 
@@ -54,7 +54,7 @@ const findAuthEmailsByIds = async (userIds: string[]) => {
 }
 
 const getProfilesForOrganisation = async (organisationId: string) => {
-    const preferredQuery = await supabaseAdmin
+    const preferredQuery = await db
         .from('profiles')
         .select('id, full_name, role, is_active, invited_by, created_at, organisations_id')
         .eq('organisations_id', organisationId)
@@ -64,7 +64,7 @@ const getProfilesForOrganisation = async (organisationId: string) => {
         return preferredQuery.data as ProfileRow[]
     }
 
-    const fallbackQuery = await supabaseAdmin
+    const fallbackQuery = await db
         .from('profiles')
         .select('*')
         .eq('organisations_id', organisationId)
@@ -78,7 +78,7 @@ const getProfilesForOrganisation = async (organisationId: string) => {
 }
 
 export const getProfilesService = async (requesterId: string) => {
-    const { data: requesterProfile, error: requesterProfileError } = await supabaseAdmin
+    const { data: requesterProfile, error: requesterProfileError } = await db
         .from('profiles')
         .select('organisations_id')
         .eq('id', requesterId)
@@ -93,7 +93,7 @@ export const getProfilesService = async (requesterId: string) => {
     const profileIds = profiles.map((profile) => profile.id)
 
 
-    const { data: departmentAccessData } = await supabaseAdmin
+    const { data: departmentAccessData } = await db
         .from('profile_department_access')
         .select('profile_id, department_id, departments(id, name)')
         .in('profile_id', profileIds)

@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../lib/supabase'
+import { db } from '../lib/supabase'
 import { KPI_DEFINITIONS } from './kpi.service'
 import { OrganisationKpi, SupportedKpiKey } from '../types'
 // håndtere hvilke kpiér en virksomhed har valgt at følge
@@ -11,7 +11,7 @@ export const listAvailableKpis = () => {
 }
 
 export const getTrackedKpis = async (organisationId: string): Promise<OrganisationKpi[]> => {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('organisation_kpis')
         .select('id, organisations_id, key, name, is_active, created_at, updated_at')
         .eq('organisations_id', organisationId)
@@ -35,14 +35,14 @@ export const replaceTrackedKpis = async (organisationId: string, keys: Supported
             updated_at: timestamp,
         }))
 
-        const { error } = await supabaseAdmin
+        const { error } = await db
             .from('organisation_kpis')
             .upsert(rows, { onConflict: 'organisations_id,key' })
 
         if (error) throw new Error('Kunne ikke gemme valgte KPIer.')
     }
 
-    const { data: existingRows, error: existingError } = await supabaseAdmin
+    const { data: existingRows, error: existingError } = await db
         .from('organisation_kpis')
         .select('key')
         .eq('organisations_id', organisationId)
@@ -54,7 +54,7 @@ export const replaceTrackedKpis = async (organisationId: string, keys: Supported
         .filter((key) => !uniqueKeys.includes(key))
 
     if (inactiveKeys.length > 0) {
-        const { error } = await supabaseAdmin
+        const { error } = await db
             .from('organisation_kpis')
             .update({ is_active: false, updated_at: timestamp })
             .eq('organisations_id', organisationId)

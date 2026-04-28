@@ -3,12 +3,12 @@ import { getKpiMetadata } from './kpi-metadata.service'
 
 export const KPI_DEFINITIONS: Record<SupportedKpiKey, { name: string; unit: KpiMetric['unit'] }> = {
     revenue: { name: 'Omsætning', unit: 'currency' },
-    variableCosts: { name: 'Variable Costs', unit: 'currency' },
-    contributionMargin: { name: 'Contribution Margin', unit: 'currency' },
-    grossProfit: { name: 'Gross Profit', unit: 'currency' },
-    monthlyGrowthRate: { name: 'Monthly Growth Rate', unit: 'percentage' },
+    variableCosts: { name: 'Variable omkostninger', unit: 'currency' },
+    contributionMargin: { name: 'Dækningsbidrag', unit: 'currency' },
+    grossProfit: { name: 'Bruttofortjeneste', unit: 'currency' },
+    monthlyGrowthRate: { name: 'Månedlig vækst', unit: 'percentage' },
     bruttofortjeneste: { name: 'Bruttofortjeneste', unit: 'currency' },
-    grossMargin: { name: 'Bruttomargin (%)', unit: 'percentage' },
+    grossMargin: { name: 'Bruttomargin', unit: 'percentage' },
     ebitda: { name: 'EBITDA', unit: 'currency' },
     netResult: { name: 'Nettoresultat', unit: 'currency' },
     cashFlow: { name: 'Cash Flow', unit: 'currency' },
@@ -17,16 +17,15 @@ export const KPI_DEFINITIONS: Record<SupportedKpiKey, { name: string; unit: KpiM
     debtorDays: { name: 'Debitordage', unit: 'days' },
 }
 
-const normalizeCategoryType = (value?: string | null) => {
-    return (value ?? '').trim().toLowerCase()
-}
+const normalizeCategoryType = (value?: string | null) => (value ?? '').trim().toLowerCase()
 
+// Expenses, taxes and depreciation are stored as NEGATIVE amounts.
+// This function sums amounts for matching category types — the sign is preserved.
 const sumByCategoryTypes = (transactions: Transaction[], categoryTypes: string[]) => {
     const expected = new Set(categoryTypes)
-    return transactions.reduce((sum, transaction) => {
-        const normalizedType = normalizeCategoryType(transaction.category?.type)
-        if (!expected.has(normalizedType)) return sum
-        return sum + Number(transaction.amount)
+    return transactions.reduce((sum, t) => {
+        if (!expected.has(normalizeCategoryType(t.category?.type))) return sum
+        return sum + Number(t.amount)
     }, 0)
 }
 
@@ -39,23 +38,13 @@ const buildMetric = (
     reason?: string,
 ): KpiMetric => {
     const metadata = getKpiMetadata(key)
-
-    return {
-        label,
-        value,
-        unit,
-        available,
-        reason,
-        definition: metadata.definition,
-        calculationExample: metadata.calculationExample,
-    }
+    return { label, value, unit, available, reason, definition: metadata.definition, calculationExample: metadata.calculationExample }
 }
 
 export const calculateInclusiveDays = (from: string, to: string) => {
     const fromDate = new Date(`${from}T00:00:00Z`)
     const toDate = new Date(`${to}T00:00:00Z`)
-    const millisecondsPerDay = 1000 * 60 * 60 * 24
-    return Math.floor((toDate.getTime() - fromDate.getTime()) / millisecondsPerDay) + 1
+    return Math.floor((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
 }
 
 export const shiftDateByDays = (date: string, days: number) => {
@@ -65,113 +54,129 @@ export const shiftDateByDays = (date: string, days: number) => {
 }
 
 export const calculateKpis = (transactions: Transaction[], from: string, to: string): KpiResult => {
-    const currentPeriodTransactions = transactions.filter(
-        (transaction) => transaction.date >= from && transaction.date <= to,
+    const current = transactions.filter((t) => t.date >= from && t.date <= to)
+
+    // ── Raw sums (expenses/taxes/depreciation are negative amounts) ──────────
+    const revenue = sumByCategoryTypes(current, ['income'])             // positive
+    const expensesSum = sumByCategoryTypes(current, ['expense'])        // negative
+    const taxesSum = sumByCategoryTypes(current, ['tax'])               // negative
+    const depreciationSum = sumByCategoryTypes(current, ['depreciation']) // negative
+
+    // ── COGS vs OpEx split ───────────────────────────────────────────────────
+    // Vareforbrug = expense transactions tagged with statement_section = 'cogs'
+    const cogsSum = current.reduce((s, t) =>
+        t.category?.statement_section === 'cogs' ? s + Number(t.amount) : s, 0)
+
+    // ── Variable costs (expense transactions tagged cost_behavior = 'variable') ─
+    const variableSum = current.reduce((s, t) =>
+        t.category?.cost_behavior === 'variable' && normalizeCategoryType(t.category?.type) === 'expense'
+            ? s + Number(t.amount) : s, 0)
+
+    const hasCogsData = current.some((t) => t.category?.statement_section === 'cogs')
+    const hasVariableData = current.some(
+        (t) => t.category?.cost_behavior === 'variable' && normalizeCategoryType(t.category?.type) === 'expense'
     )
 
-    const revenue = sumByCategoryTypes(currentPeriodTransactions, ['income'])
-    const operatingExpenses = sumByCategoryTypes(currentPeriodTransactions, ['expense'])
-    const taxes = sumByCategoryTypes(currentPeriodTransactions, ['tax'])
-    const depreciation = sumByCategoryTypes(currentPeriodTransactions, ['depreciation'])
-    const totalExpenses = operatingExpenses + taxes + depreciation
-    const cashInflows = revenue
-    const cashOutflows = operatingExpenses + taxes
-    const periodDays = calculateInclusiveDays(from, to)
-    const burnRate = periodDays > 0 ? Math.abs((cashOutflows / periodDays) * 30.4375) : null
+    // ── Core KPI formulas ────────────────────────────────────────────────────
+    // Bruttofortjeneste = Omsætning - Vareforbrug
+    //   cogsSum is negative → revenue + cogsSum = revenue - |cogs|
+    const grossProfitValue = revenue + cogsSum
 
+    // Bruttomargin = Bruttofortjeneste / Omsætning × 100
+    const grossMarginValue = revenue !== 0 ? (grossProfitValue / revenue) * 100 : null
+
+    // Dækningsbidrag = Omsætning - Variable omkostninger
+    //   variableSum is negative → revenue + variableSum = revenue - |variable|
+    const contributionMarginValue = revenue + variableSum
+
+    // EBITDA = Omsætning - Vareforbrug - Driftsomkostninger (excl. afskrivninger, renter, skat)
+    //   expensesSum is negative → revenue + expensesSum = revenue - |expenses|
+    const ebitdaValue = revenue + expensesSum
+
+    // Nettoresultat = EBITDA - Afskrivninger - Skat
+    //   taxesSum and depreciationSum are negative
+    const netResultValue = ebitdaValue + taxesSum + depreciationSum
+
+    // Cash Flow (indirekte metode) = Nettoresultat + Afskrivninger (tilbageføres, ikke-kontant)
+    //   = revenue + expensesSum + taxesSum
+    const cashFlowValue = netResultValue - depreciationSum
+
+    // Burn Rate = månedliggjorte kontante udbetalinger
+    //   expensesSum + taxesSum is negative → Math.abs gives positive monthly rate
+    const cashOutflowsSum = expensesSum + taxesSum
+    const periodDays = calculateInclusiveDays(from, to)
+    const burnRateValue = periodDays > 0 ? Math.abs((cashOutflowsSum / periodDays) * 30.4375) : null
+
+    // Månedlig vækst = (nuværende omsætning - foregående) / foregående × 100
     const previousFrom = shiftDateByDays(from, -periodDays)
     const previousTo = shiftDateByDays(from, -1)
     const previousRevenue = sumByCategoryTypes(
         transactions.filter((t) => t.date >= previousFrom && t.date <= previousTo),
         ['income'],
     )
-    const monthlyGrowthRate =
-        previousRevenue === 0
-            ? null
-            : ((revenue - previousRevenue) / previousRevenue) * 100
+    const monthlyGrowthRate = previousRevenue === 0
+        ? null
+        : ((revenue - previousRevenue) / previousRevenue) * 100
 
-    const unavailableVariableCostReason = 'Kræver en særskilt kategori for variable costs eller COGS/vareforbrug, som datamodellen ikke har endnu.'
-    const unavailableZeroRevenueReason = 'Kan ikke beregnes når omsætning er 0 i perioden.'
-
-    const cogsAmount = currentPeriodTransactions.reduce((sum, t) => {
-        if (t.category?.statement_section === 'cogs') return sum + Number(t.amount)
-        return sum
-    }, 0)
-
-    const variableCostsAmount = currentPeriodTransactions.reduce((sum, t) => {
-        if (t.category?.cost_behavior === 'variable') return sum + Number(t.amount)
-        return sum
-    }, 0)
-
-    const grossProfitValue = revenue - Math.abs(cogsAmount)
-    const grossMarginValue = revenue !== 0 ? (grossProfitValue / revenue) * 100 : null
-    const contributionMarginValue = revenue - Math.abs(variableCostsAmount)
-
-    const hasCogsData = currentPeriodTransactions.some(t => t.category?.statement_section === 'cogs')
-    const hasVariableData = currentPeriodTransactions.some(t => t.category?.cost_behavior === 'variable')
+    const noCogsReason = 'Kræver transaktioner i en kategori med vareforbrug (cogs).'
+    const noVariableReason = 'Kræver transaktioner i kategorier markeret med variabel omkostningsadfærd.'
+    const noRevenueReason = 'Kan ikke beregnes når omsætning er 0 i perioden.'
 
     return {
         period: { from, to },
         metrics: {
             revenue: buildMetric('revenue', 'Omsætning', 'currency', revenue, true),
-            variableCosts: buildMetric('variableCosts', 'Variable Costs', 'currency',
-                hasVariableData ? Math.abs(variableCostsAmount) : null,
-                hasVariableData,
-                !hasVariableData ? unavailableVariableCostReason : undefined
-            ),
-            contributionMargin: buildMetric('contributionMargin', 'Contribution Margin', 'currency',
-                hasVariableData ? contributionMarginValue : null,
-                hasVariableData,
-                !hasVariableData ? unavailableVariableCostReason : undefined
-            ),
-            grossProfit: buildMetric('grossProfit', 'Gross Profit', 'currency',
-                hasCogsData ? grossProfitValue : null,
-                hasCogsData,
-                !hasCogsData ? unavailableVariableCostReason : undefined
-            ),
-            monthlyGrowthRate: buildMetric(
-                'monthlyGrowthRate',
-                'Monthly Growth Rate', 'percentage',
-                monthlyGrowthRate,
-                monthlyGrowthRate !== null,
-                monthlyGrowthRate === null ? 'Kræver omsætning i den foregående sammenligningsperiode.' : undefined,
-            ),
+
+            grossProfit: buildMetric('grossProfit', 'Bruttofortjeneste', 'currency',
+                hasCogsData ? grossProfitValue : null, hasCogsData,
+                !hasCogsData ? noCogsReason : undefined),
+
             bruttofortjeneste: buildMetric('bruttofortjeneste', 'Bruttofortjeneste', 'currency',
-                hasCogsData ? grossProfitValue : null,
-                hasCogsData,
-                !hasCogsData ? unavailableVariableCostReason : undefined
-            ),
-            grossMargin: buildMetric('grossMargin', 'Bruttomargin (%)', 'percentage',
+                hasCogsData ? grossProfitValue : null, hasCogsData,
+                !hasCogsData ? noCogsReason : undefined),
+
+            grossMargin: buildMetric('grossMargin', 'Bruttomargin', 'percentage',
                 hasCogsData && revenue !== 0 ? grossMarginValue : null,
                 hasCogsData && revenue !== 0,
-                !hasCogsData ? unavailableVariableCostReason : revenue === 0 ? unavailableZeroRevenueReason : undefined
-            ),
-            ebitda: buildMetric('ebitda', 'EBITDA', 'currency', revenue - operatingExpenses, true),
-            netResult: buildMetric('netResult', 'Nettoresultat', 'currency', revenue - totalExpenses, true),
-            cashFlow: buildMetric('cashFlow', 'Cash Flow', 'currency', cashInflows - cashOutflows, true),
-            liquidityRatio: buildMetric(
-                'liquidityRatio',
-                'Likviditetsgrad', 'ratio', null, false,
-                'Kræver balance-data for omsætningsaktiver og kortfristet gæld, ikke kun transaktioner.',
-            ),
-            burnRate: buildMetric('burnRate', 'Burn Rate', 'currency', burnRate, true,
-                'Beregnet som månedliggjorte kontante udgifter i perioden. Afskrivninger indgår ikke.',
-            ),
-            debtorDays: buildMetric(
-                'debtorDays',
-                'Debitordage', 'days', null, false,
-                'Kræver saldo på tilgodehavender ved periodens slutning, ikke kun transaktioner.',
-            ),
+                !hasCogsData ? noCogsReason : revenue === 0 ? noRevenueReason : undefined),
+
+            variableCosts: buildMetric('variableCosts', 'Variable omkostninger', 'currency',
+                hasVariableData ? Math.abs(variableSum) : null, hasVariableData,
+                !hasVariableData ? noVariableReason : undefined),
+
+            contributionMargin: buildMetric('contributionMargin', 'Dækningsbidrag', 'currency',
+                hasVariableData ? contributionMarginValue : null, hasVariableData,
+                !hasVariableData ? noVariableReason : undefined),
+
+            ebitda: buildMetric('ebitda', 'EBITDA', 'currency', ebitdaValue, true),
+
+            netResult: buildMetric('netResult', 'Nettoresultat', 'currency', netResultValue, true),
+
+            cashFlow: buildMetric('cashFlow', 'Cash Flow', 'currency', cashFlowValue, true),
+
+            burnRate: buildMetric('burnRate', 'Burn Rate', 'currency', burnRateValue, burnRateValue !== null,
+                burnRateValue === null ? 'Kræver en periode med mere end 0 dage.' : undefined),
+
+            monthlyGrowthRate: buildMetric('monthlyGrowthRate', 'Månedlig vækst', 'percentage',
+                monthlyGrowthRate, monthlyGrowthRate !== null,
+                monthlyGrowthRate === null ? 'Kræver omsætning i den foregående sammenligningsperiode.' : undefined),
+
+            liquidityRatio: buildMetric('liquidityRatio', 'Likviditetsgrad', 'ratio', null, false,
+                'Kræver balance-data for omsætningsaktiver og kortfristet gæld.'),
+
+            debtorDays: buildMetric('debtorDays', 'Debitordage', 'days', null, false,
+                'Kræver saldo på tilgodehavender ved periodens slutning.'),
         },
         assumptions: [
-            'KPIer beregnes ud fra transaktioner i den valgte periode.',
-            'Omsætning hentes fra kategorier med type income.',
-            'Driftsomkostninger hentes fra kategorier med type expense.',
-            'Skat hentes fra kategorier med type tax.',
-            'Afskrivninger hentes fra kategorier med type depreciation.',
-            'Cash Flow og Burn Rate behandler afskrivninger som ikke-kontante poster.',
-            'Monthly Growth Rate sammenligner omsætning med den umiddelbart foregående periode af samme længde.',
+            'Omsætning: sum af transaktioner med kategoritype "income".',
+            'Vareforbrug: transaktioner med statement_section "cogs" (negativt lagret, vises som positivt).',
+            'Bruttofortjeneste: Omsætning − Vareforbrug.',
+            'EBITDA: Omsætning − Driftsomkostninger (excl. afskrivninger og skat).',
+            'Nettoresultat: EBITDA − Afskrivninger − Skat.',
+            'Cash Flow (indirekte): Nettoresultat + Afskrivninger (tilbageføres som ikke-kontant post).',
+            'Burn Rate: månedliggjorte kontante udbetalinger (excl. afskrivninger).',
+            'Månedlig vækst: sammenligner omsætning med foregående periode af samme længde.',
         ],
-        transactionCount: currentPeriodTransactions.length,
+        transactionCount: current.length,
     }
 }

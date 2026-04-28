@@ -1,7 +1,7 @@
-import { supabaseAdmin } from '../lib/supabase'
+import { db } from '../lib/supabase'
 
 export const createDepartmentService = async (organisationId: string, name: string) => {
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await db
         .from('departments')
         .select('id')
         .eq('organisations_id', organisationId)
@@ -11,7 +11,7 @@ export const createDepartmentService = async (organisationId: string, name: stri
 
     if (existing) throw new Error('Et department med det navn findes allerede.')
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('departments')
         .insert({ organisations_id: organisationId, name, is_active: true })
         .select('id, organisations_id, name, is_active, created_at')
@@ -22,7 +22,7 @@ export const createDepartmentService = async (organisationId: string, name: stri
 }
 
 export const getDepartmentsService = async (organisationId: string) => {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('departments')
         .select('id, name, is_active, created_at')
         .eq('organisations_id', organisationId)
@@ -34,7 +34,7 @@ export const getDepartmentsService = async (organisationId: string) => {
 }
 
 const getDepartmentById = async (organisationId: string, id: string) => {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('departments')
         .select('id, organisations_id, name, is_active, created_at')
         .eq('id', id)
@@ -49,7 +49,7 @@ const getDepartmentById = async (organisationId: string, id: string) => {
 export const updateDepartmentService = async (organisationId: string, id: string, name: string) => {
     await getDepartmentById(organisationId, id)
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await db
         .from('departments')
         .select('id')
         .eq('organisations_id', organisationId)
@@ -60,7 +60,7 @@ export const updateDepartmentService = async (organisationId: string, id: string
 
     if (existing) throw new Error('Et department med det navn findes allerede.')
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('departments')
         .update({ name })
         .eq('id', id)
@@ -76,7 +76,7 @@ export const updateDepartmentService = async (organisationId: string, id: string
 export const deleteDepartmentService = async (organisationId: string, id: string) => {
     await getDepartmentById(organisationId, id)
 
-    const { error: categoryError } = await supabaseAdmin
+    const { error: categoryError } = await db
         .from('categories')
         .update({ is_active: false })
         .eq('organisations_id', organisationId)
@@ -85,7 +85,7 @@ export const deleteDepartmentService = async (organisationId: string, id: string
 
     if (categoryError) throw new Error('Kunne ikke deaktivere department-kategorier.')
 
-    const { error } = await supabaseAdmin
+    const { error } = await db
         .from('departments')
         .update({ is_active: false })
         .eq('id', id)

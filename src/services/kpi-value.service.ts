@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../lib/supabase'
+import { db } from '../lib/supabase'
 import { calculateInclusiveDays, calculateKpis, shiftDateByDays } from './kpi.service'
 import { getTrackedKpis } from './organisation-kpi.service'
 import { KpiResult, KpiValue, SupportedKpiKey, Transaction } from '../types'
@@ -36,7 +36,7 @@ const getTransactionsForKpiWindow = async (
     from: string,
     to: string,
 ): Promise<Transaction[]> => {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('transactions')
         .select(
             'id, organisations_id, category_id, amount, date, description, created_at, category:categories!inner(id, name, type, statement_section, cost_behavior, is_cash)',
@@ -96,11 +96,19 @@ export const recalculateMonthlyKpis = async (organisationId: string, date: strin
     const result = calculateKpis(transactions, from, to)
     const rows = buildUpsertRows(organisationId, from, to, trackedKeys, result)
 
-    const { data, error } = await supabaseAdmin
+    const { error: deleteError } = await db
         .from('kpi_values')
-        .upsert(rows, {
-            onConflict: 'organisations_id,kpi_key,period_type,period_start,period_end',
-        })
+        .delete()
+        .eq('organisations_id', organisationId)
+        .eq('period_type', 'month')
+        .eq('period_start', from)
+        .eq('period_end', to)
+
+    if (deleteError) throw new Error('Kunne ikke slette gamle KPI-værdier.')
+
+    const { data, error } = await db
+        .from('kpi_values')
+        .insert(rows)
         .select(
             'id, organisations_id, department_id, kpi_key, period_type, period_start, period_end, value, unit, available, reason, source_transaction_count, calculated_at, created_at, updated_at',
         )
@@ -127,7 +135,7 @@ export const getKpiHistory = async (
     from: string,
     to: string,
 ): Promise<KpiValue[]> => {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('kpi_values')
         .select(
             'id, organisations_id, department_id, kpi_key, period_type, period_start, period_end, value, unit, available, reason, source_transaction_count, calculated_at, created_at, updated_at',

@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../lib/supabase'
+import { db } from '../lib/supabase'
 import { recalculateMonthlyKpis } from './kpi-value.service'
 import { Transaction } from '../types'
 
@@ -44,7 +44,7 @@ export const createTransaction = async (
         is_deleted: false,
     }))
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('transactions')
         .insert(rows)
         .select('id, organisations_id, category_id, amount, date, description, created_at')
@@ -69,7 +69,7 @@ export const createTransaction = async (
 }
 
 export const getTransactions = async (organisationId: string) => {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('transactions')
         .select(`
             id,
@@ -103,7 +103,7 @@ export const getTransactionsForKpi = async (
     to: string,
 ): Promise<Transaction[]> => {
     // KPI-beregninger kræver kategoriens type, så vi joiner categories på hver transaktion.
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('transactions')
         .select(
             'id, organisations_id, category_id, amount, date, description, created_at, category:categories!inner(id, name, type, statement_section, cost_behavior, is_cash)',
@@ -124,7 +124,7 @@ export const getTransactionsForKpi = async (
 }
 
 const getTransactionById = async (organisationId: string, id: string) => {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('transactions')
         .select('id, organisations_id, category_id, amount, date, description, created_at, is_deleted')
         .eq('id', id)
@@ -137,7 +137,7 @@ const getTransactionById = async (organisationId: string, id: string) => {
 
 export const updateTransaction = async (organisationId: string, id: string, amount: number, date: string, description: string | null) => {
     const existing = await getTransactionById(organisationId, id)
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('transactions')
         .update({ amount, date, description, updated_at: new Date().toISOString() })
         .eq('id', id)
@@ -153,7 +153,7 @@ export const updateTransaction = async (organisationId: string, id: string, amou
 
 export const deleteTransaction = async (organisationId: string, id: string) => {
     const existing = await getTransactionById(organisationId, id)
-    const { error } = await supabaseAdmin
+    const { error } = await db
         .from('transactions')
         .update({ is_deleted: true })
         .eq('id', id)

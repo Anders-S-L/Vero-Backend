@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../lib/supabase'
+import { db } from '../lib/supabase'
 
 export const createCategoryService = async (
     organisationId: string,
@@ -6,7 +6,7 @@ export const createCategoryService = async (
     name: string,
     type: string,
 ) => {
-    const { data: department, error: departmentError } = await supabaseAdmin
+    const { data: department, error: departmentError } = await db
         .from('departments')
         .select('id')
         .eq('id', departmentId)
@@ -16,7 +16,7 @@ export const createCategoryService = async (
 
     if (departmentError || !department) throw new Error('Kunne ikke finde department.')
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await db
         .from('categories')
         .select('id')
         .eq('organisations_id', organisationId)
@@ -27,7 +27,7 @@ export const createCategoryService = async (
 
     if (existing) throw new Error('En kategori med det navn findes allerede i denne afdeling.')
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('categories')
         .insert({
             organisations_id: organisationId,
@@ -46,7 +46,7 @@ export const createCategoryService = async (
 }
 
 export const getCategoriesService = async (organisationId: string, departmentId?: string) => {
-    let query = supabaseAdmin
+    let query = db
         .from('categories')
         .select('id, organisations_id, department_id, name, type, is_active, created_at')
         .eq('organisations_id', organisationId)
@@ -61,7 +61,7 @@ export const getCategoriesService = async (organisationId: string, departmentId?
 }
 
 const getCategoryById = async (organisationId: string, id: string) => {
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('categories')
         .select('id, organisations_id, department_id, name, type, is_active, created_at')
         .eq('id', id)
@@ -76,7 +76,7 @@ const getCategoryById = async (organisationId: string, id: string) => {
 export const updateCategoryService = async (organisationId: string, id: string, name: string, type: string) => {
     const existingCategory = await getCategoryById(organisationId, id)
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing } = await db
         .from('categories')
         .select('id')
         .eq('organisations_id', organisationId)
@@ -88,7 +88,7 @@ export const updateCategoryService = async (organisationId: string, id: string, 
 
     if (existing) throw new Error('En kategori med det navn findes allerede i denne afdeling.')
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
         .from('categories')
         .update({ name, type })
         .eq('id', id)
@@ -104,7 +104,7 @@ export const updateCategoryService = async (organisationId: string, id: string, 
 export const deleteCategoryService = async (organisationId: string, id: string) => {
     await getCategoryById(organisationId, id)
 
-    const { error } = await supabaseAdmin
+    const { error } = await db
         .from('categories')
         .update({ is_active: false })
         .eq('id', id)
