@@ -75,3 +75,27 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
     req.userProfile = profile
     next()
 }
+
+export const requireManager = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const { data: profile, error } = await db
+        .from('profiles')
+        .select('id, organisations_id, role, is_active')
+        .eq('id', req.user!.id)
+        .single()
+
+    console.log('profile:', profile)
+    console.log('error:', error)
+
+    if (
+        error ||
+        !profile ||
+        !profile.is_active ||
+        !['admin', 'manager'].includes(profile.role)
+    ) {
+        res.status(403).json({ success: false, error: 'Adgang nægtet.' })
+        return
+    }
+
+    req.userProfile = profile
+    next()
+}
