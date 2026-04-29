@@ -1,7 +1,7 @@
 import { Request, Response } from 'express'
 import { calculateInclusiveDays, calculateKpis, shiftDateByDays } from '../services/kpi.service'
 import { getTransactionsForKpi } from '../services/transaction.service'
-import { getKpiHistory, recalculateKpiRange } from '../services/kpi-value.service'
+import { getKpiHistory, getTransactionDateRange, recalculateKpiRange } from '../services/kpi-value.service'
 import { getTrackedKpis, listAvailableKpis, replaceTrackedKpis } from '../services/organisation-kpi.service'
 import { validateKpiHistoryQuery, validateKpiQuery, validateTrackedKpisBody } from '../validators/kpi.validator'
 
@@ -58,8 +58,25 @@ export const getKpiHistoryController = async (req: Request, res: Response): Prom
 
 export const rebuildKpisController = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { from, to } = validateKpiQuery(req.body)
-        const data = await recalculateKpiRange(req.userProfile!.organisations_id, from, to)
+        const organisationId = req.userProfile!.organisations_id
+        let from: string
+        let to: string
+
+        if (req.body?.from && req.body?.to) {
+            const validated = validateKpiQuery(req.body)
+            from = validated.from
+            to = validated.to
+        } else {
+            const range = await getTransactionDateRange(organisationId)
+            if (!range) {
+                res.status(200).json({ success: true, data: [], message: 'Ingen transaktioner fundet.' })
+                return
+            }
+            from = range.from
+            to = range.to
+        }
+
+        const data = await recalculateKpiRange(organisationId, from, to)
         res.status(200).json({ success: true, data })
     } catch (error) {
         res.status(400).json({ success: false, error: (error as Error).message })

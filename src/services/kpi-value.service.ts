@@ -1,5 +1,5 @@
 import { db } from '../lib/supabase'
-import { calculateInclusiveDays, calculateKpis, shiftDateByDays } from './kpi.service'
+import { calculateInclusiveDays, calculateKpis, KPI_DEFINITIONS, shiftDateByDays } from './kpi.service'
 import { getTrackedKpis } from './organisation-kpi.service'
 import { KpiResult, KpiValue, SupportedKpiKey, Transaction } from '../types'
 // Håndtere det gemte KPI-resultat over tid, inklusive genberegning og historik.
@@ -86,9 +86,9 @@ const buildUpsertRows = (
 
 export const recalculateMonthlyKpis = async (organisationId: string, date: string): Promise<KpiValue[]> => {
     const trackedKpis = await getTrackedKpis(organisationId)
-    if (trackedKpis.length === 0) return []
-
-    const trackedKeys = trackedKpis.map((kpi) => kpi.key)
+    const trackedKeys: SupportedKpiKey[] = trackedKpis.length > 0
+        ? trackedKpis.map((kpi) => kpi.key)
+        : (Object.keys(KPI_DEFINITIONS) as SupportedKpiKey[])
     const { from, to } = getMonthBounds(date)
     const periodDays = calculateInclusiveDays(from, to)
     const comparisonFrom = shiftDateByDays(from, -periodDays)
@@ -127,6 +127,32 @@ export const recalculateKpiRange = async (organisationId: string, from: string, 
     }
 
     return values
+}
+
+export const getTransactionDateRange = async (organisationId: string): Promise<{ from: string; to: string } | null> => {
+    const { data, error } = await db
+        .from('transactions')
+        .select('date')
+        .eq('organisations_id', organisationId)
+        .eq('is_deleted', false)
+        .order('date', { ascending: true })
+        .limit(1)
+
+    if (error || !data || data.length === 0) return null
+
+    const oldest = data[0].date as string
+
+    const { data: newestData, error: newestError } = await db
+        .from('transactions')
+        .select('date')
+        .eq('organisations_id', organisationId)
+        .eq('is_deleted', false)
+        .order('date', { ascending: false })
+        .limit(1)
+
+    if (newestError || !newestData || newestData.length === 0) return null
+
+    return { from: oldest, to: newestData[0].date as string }
 }
 
 export const getKpiHistory = async (
