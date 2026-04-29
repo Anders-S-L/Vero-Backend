@@ -1,5 +1,5 @@
 import { Request, Response } from 'express'
-import { createDepartmentService, deleteDepartmentService, getDepartmentsService, updateDepartmentService } from '../services/department.service'
+import { createDepartmentService, deleteDepartmentService, getAccessibleDepartmentsService, updateDepartmentService } from '../services/department.service'
 import { validateCreateDepartment, validateUpdateDepartment } from '../validators/department.validator'
 
 export const createDepartment = async (req: Request, res: Response): Promise<void> => {
@@ -14,7 +14,7 @@ export const createDepartment = async (req: Request, res: Response): Promise<voi
 
 export const getDepartments = async (req: Request, res: Response): Promise<void> => {
     try {
-        const data = await getDepartmentsService(req.userProfile!.organisations_id)
+        const data = await getAccessibleDepartmentsService(req.userProfile!)
         res.status(200).json({ success: true, data })
     } catch (error) {
         res.status(400).json({ success: false, error: (error as Error).message })
