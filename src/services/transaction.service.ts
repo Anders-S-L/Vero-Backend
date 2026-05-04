@@ -9,26 +9,6 @@ type AccessProfile = {
     role: 'admin' | 'manager' | 'employee'
 }
 
-const addMonths = (isoDate: string, months: number) => {
-    const current = new Date(isoDate)
-    current.setMonth(current.getMonth() + months)
-    return current.toISOString().slice(0, 10)
-}
-
-const buildRecurringDates = (startDate: string, repeatUntil: string | null) => {
-    if (!repeatUntil) return [startDate]
-    const dates: string[] = []
-    let index = 0
-    let current = startDate
-
-    while (new Date(current) <= new Date(repeatUntil)) {
-        dates.push(current)
-        index += 1
-        current = addMonths(startDate, index)
-    }
-
-    return dates
-}
 
 export const createTransaction = async (
     profile: AccessProfile,
@@ -44,16 +24,15 @@ export const createTransaction = async (
         throw new Error('Medarbejdere kan kun oprette indtaegter og udgifter.')
     }
 
-    const transactionDates = repeatMonthly ? buildRecurringDates(date, repeatUntil) : [date]
-    const rows = transactionDates.map((transactionDate) => ({
+    const rows = [{
         organisations_id: profile.organisations_id,
         created_by: profile.id,
         amount,
-        date: transactionDate,
+        date,
         category_id,
         description,
         is_deleted: false,
-    }))
+    }]
 
     const { data, error } = await db
         .from('transactions')
@@ -66,14 +45,13 @@ export const createTransaction = async (
 
     if (error || !data || data.length === 0) throw new Error('Kunne ikke oprette transaktion.')
 
-    const uniqueMonths = Array.from(new Set(transactionDates.map((transactionDate) => transactionDate.slice(0, 7))))
-    await Promise.all(uniqueMonths.map((month) => recalculateMonthlyKpis(profile.organisations_id, `${month}-01`)))
+    await recalculateMonthlyKpis(profile.organisations_id, date)
 
     if (!repeatMonthly) return data[0]
 
     return {
         recurring: true,
-        created_count: data.length,
+        created_count: 1,
         repeat_until: repeatUntil,
         transactions: data,
     }
