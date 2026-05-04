@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '../lib/supabase'
-import { InviteEmployeeRequest, LoginRequest } from '../types/index'
+import { InviteEmployeeRequest, LoginRequest, UserRole } from '../types/index'
 
 type RegisterOwnerInput = {
     email: string
@@ -14,8 +14,13 @@ type RegisterOwnerInput = {
 type InviterProfile = {
     id: string
     organisations_id: string
-    role: 'admin' | 'manager' | 'employee' | 'auditor'
+    role: string
     is_active: boolean
+}
+
+const normalizeRole = (role: unknown): UserRole | null => {
+    const normalized = typeof role === 'string' ? role.toLowerCase().trim() : ''
+    return ['admin', 'manager', 'employee'].includes(normalized) ? normalized as UserRole : null
 }
 
 const getInviteRedirectTo = () => {
@@ -48,11 +53,26 @@ const findAuthUserByEmail = async (email: string) => {
 }
 
 const validateInvitePermissions = (inviter: InviterProfile, invitedRole: InviteEmployeeRequest['role']) => {
-    if (inviter.role === 'admin') return
-
-    if (inviter.role === 'manager' && invitedRole === 'employee') return
+    const inviterRole = normalizeRole(inviter.role)
+    if (inviterRole === 'admin') return
+    if (inviterRole === 'manager' && invitedRole === 'employee') return
 
     throw new Error('Du har ikke rettigheder til at invitere denne rolle.')
+}
+
+const validateInviteDepartmentAccess = async (inviter: InviterProfile, departmentId: string) => {
+    if (normalizeRole(inviter.role) === 'admin') return
+
+    const { data, error } = await supabaseAdmin
+        .from('profile_department_access')
+        .select('department_id')
+        .eq('profile_id', inviter.id)
+        .eq('department_id', departmentId)
+        .maybeSingle()
+
+    if (error || !data) {
+        throw new Error('Du kan kun invitere medarbejdere til din egen afdeling.')
+    }
 }
 
 export const registerOwnerWithOrganization = async (input: RegisterOwnerInput) => {
@@ -135,6 +155,8 @@ export const inviteEmployeeToOrganization = async (inviterId: string, input: Inv
     if (departmentError || !department) {
         throw new Error('Valgt afdeling findes ikke i organisationen.')
     }
+
+    await validateInviteDepartmentAccess(inviter, input.departmentId)
 
     const existingAuthUser = await findAuthUserByEmail(input.email)
 
@@ -248,7 +270,7 @@ export const loginWithEmailPassword = async (input: LoginRequest) => {
         expiresIn: loginResult.data.session.expires_in,
         tokenType: loginResult.data.session.token_type,
         fullName: profile?.full_name,
-        role: profile?.role,
+        role: normalizeRole(profile?.role),
         organisationName: organisation?.name,
     }
 }

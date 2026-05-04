@@ -1,6 +1,13 @@
 import { db } from '../lib/supabase'
 import { recalculateMonthlyKpis } from './kpi-value.service'
 import { Transaction } from '../types'
+import { assertCategoryAccess } from './category.service'
+
+type AccessProfile = {
+    id: string
+    organisations_id: string
+    role: 'admin' | 'manager' | 'employee'
+}
 
 const addMonths = (isoDate: string, months: number) => {
     const current = new Date(isoDate)
@@ -24,8 +31,7 @@ const buildRecurringDates = (startDate: string, repeatUntil: string | null) => {
 }
 
 export const createTransaction = async (
-    organisationId: string,
-    userId: string,
+    profile: AccessProfile,
     amount: number,
     date: string,
     category_id: string,
@@ -33,10 +39,15 @@ export const createTransaction = async (
     repeatMonthly = false,
     repeatUntil: string | null = null,
 ) => {
+    const category = await assertCategoryAccess(profile, category_id)
+    if (profile.role === 'employee' && !['income', 'expense'].includes(category.type)) {
+        throw new Error('Medarbejdere kan kun oprette indtaegter og udgifter.')
+    }
+
     const transactionDates = repeatMonthly ? buildRecurringDates(date, repeatUntil) : [date]
     const rows = transactionDates.map((transactionDate) => ({
-        organisations_id: organisationId,
-        created_by: userId,
+        organisations_id: profile.organisations_id,
+        created_by: profile.id,
         amount,
         date: transactionDate,
         category_id,
@@ -56,7 +67,7 @@ export const createTransaction = async (
     if (error || !data || data.length === 0) throw new Error('Kunne ikke oprette transaktion.')
 
     const uniqueMonths = Array.from(new Set(transactionDates.map((transactionDate) => transactionDate.slice(0, 7))))
-    await Promise.all(uniqueMonths.map((month) => recalculateMonthlyKpis(organisationId, `${month}-01`)))
+    await Promise.all(uniqueMonths.map((month) => recalculateMonthlyKpis(profile.organisations_id, `${month}-01`)))
 
     if (!repeatMonthly) return data[0]
 
@@ -68,8 +79,23 @@ export const createTransaction = async (
     }
 }
 
-export const getTransactions = async (organisationId: string) => {
+const getAccessibleDepartmentIds = async (profile: AccessProfile) => {
+    if (profile.role === 'admin') return null
+
     const { data, error } = await db
+        .from('profile_department_access')
+        .select('department_id')
+        .eq('profile_id', profile.id)
+
+    if (error) throw new Error('Kunne ikke validere afdelingstilgang.')
+    return (data ?? []).map((row) => row.department_id as string)
+}
+
+export const getTransactions = async (profile: AccessProfile) => {
+    const accessibleDepartmentIds = await getAccessibleDepartmentIds(profile)
+    if (accessibleDepartmentIds && accessibleDepartmentIds.length === 0) return []
+
+    let query = db
         .from('transactions')
         .select(`
             id,
@@ -79,7 +105,7 @@ export const getTransactions = async (organisationId: string) => {
             date,
             description,
             created_at,
-            categories (
+            categories!inner (
                 id,
                 name,
                 type,
@@ -89,9 +115,14 @@ export const getTransactions = async (organisationId: string) => {
                 )
             )
         `)
-        .eq('organisations_id', organisationId)
+        .eq('organisations_id', profile.organisations_id)
         .eq('is_deleted', false)
-        .order('date', { ascending: false })
+
+    if (accessibleDepartmentIds) {
+        query = query.in('categories.department_id', accessibleDepartmentIds)
+    }
+
+    const { data, error } = await query.order('date', { ascending: false })
 
     if (error) throw new Error('Kunne ikke hente transaktioner.')
     return data
@@ -135,30 +166,34 @@ const getTransactionById = async (organisationId: string, id: string) => {
     return data
 }
 
-export const updateTransaction = async (organisationId: string, id: string, amount: number, date: string, description: string | null) => {
-    const existing = await getTransactionById(organisationId, id)
+export const updateTransaction = async (profile: AccessProfile, id: string, amount: number, date: string, description: string | null) => {
+    const existing = await getTransactionById(profile.organisations_id, id)
+    await assertCategoryAccess(profile, existing.category_id)
+
     const { data, error } = await db
         .from('transactions')
         .update({ amount, date, description, updated_at: new Date().toISOString() })
         .eq('id', id)
-        .eq('organisations_id', organisationId)
+        .eq('organisations_id', profile.organisations_id)
         .select('id, organisations_id, category_id, amount, date, description, created_at')
         .single()
 
     if (error || !data) throw new Error('Kunne ikke opdatere transaktion.')
-    await recalculateMonthlyKpis(organisationId, existing.date)
-    if (existing.date !== date) await recalculateMonthlyKpis(organisationId, date)
+    await recalculateMonthlyKpis(profile.organisations_id, existing.date)
+    if (existing.date !== date) await recalculateMonthlyKpis(profile.organisations_id, date)
     return data
 }
 
-export const deleteTransaction = async (organisationId: string, id: string) => {
-    const existing = await getTransactionById(organisationId, id)
+export const deleteTransaction = async (profile: AccessProfile, id: string) => {
+    const existing = await getTransactionById(profile.organisations_id, id)
+    await assertCategoryAccess(profile, existing.category_id)
+
     const { error } = await db
         .from('transactions')
         .update({ is_deleted: true })
         .eq('id', id)
-        .eq('organisations_id', organisationId)
+        .eq('organisations_id', profile.organisations_id)
 
     if (error) throw new Error('Kunne ikke slette transaktion.')
-    await recalculateMonthlyKpis(organisationId, existing.date)
+    await recalculateMonthlyKpis(profile.organisations_id, existing.date)
 }

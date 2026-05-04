@@ -21,7 +21,9 @@ export type RegisterOwnerResult = {
     role: 'admin'
 }
 
-export type InviteRole = 'manager' | 'employee' | 'auditor'
+export type UserRole = 'admin' | 'manager' | 'employee'
+
+export type InviteRole = Exclude<UserRole, 'admin'>
 
 export type InviteEmployeeRequest = {
     email: string

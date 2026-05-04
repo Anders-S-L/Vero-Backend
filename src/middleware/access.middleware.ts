@@ -1,6 +1,13 @@
 import { NextFunction, Request, Response } from 'express'
 import { db, supabaseAuthClient } from '../lib/supabase'
 
+type UserRole = 'admin' | 'manager' | 'employee'
+
+const normalizeRole = (role: unknown): UserRole | null => {
+    const normalized = typeof role === 'string' ? role.toLowerCase().trim() : ''
+    return ['admin', 'manager', 'employee'].includes(normalized) ? normalized as UserRole : null
+}
+
 declare global {
     namespace Express {
         interface Request {
@@ -8,16 +15,31 @@ declare global {
             userProfile?: {
                 id: string
                 organisations_id: string
-                role: 'admin' | 'manager' | 'employee' | 'auditor'
+                role: UserRole
                 is_active: boolean
             }
         }
     }
 }
 
+const loadActiveProfile = async (userId: string) => {
+    const { data: profile, error } = await db
+        .from('profiles')
+        .select('id, organisations_id, role, is_active')
+        .eq('id', userId)
+        .single()
+
+    const role = normalizeRole(profile?.role)
+
+    if (error || !profile || !profile.is_active || !role) {
+        return null
+    }
+
+    return { ...profile, role } as Express.Request['userProfile']
+}
+
 export const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const token = req.headers.authorization?.replace('Bearer ', '').trim()
-    console.log('token modtaget:', token?.substring(0, 20))
 
     if (!token) {
         res.status(401).json({ success: false, error: 'Manglende token.' })
@@ -25,8 +47,6 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     }
 
     const { data, error } = await supabaseAuthClient.auth.getUser(token)
-    console.log('auth user:', data?.user?.id)
-    console.log('auth error:', error)
 
     if (error || !data.user) {
         res.status(401).json({ success: false, error: 'Ugyldig eller udløbet token.' })
@@ -38,16 +58,9 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 }
 
 export const requireActiveProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const { data: profile, error } = await db
-        .from('profiles')
-        .select('id, organisations_id, role, is_active')
-        .eq('id', req.user!.id)
-        .single()
+    const profile = await loadActiveProfile(req.user!.id)
 
-    console.log('profile:', profile)
-    console.log('error:', error)
-
-    if (error || !profile || !profile.is_active) {
+    if (!profile) {
         res.status(403).json({ success: false, error: 'Adgang nægtet.' })
         return
     }
@@ -57,17 +70,9 @@ export const requireActiveProfile = async (req: Request, res: Response, next: Ne
 }
 
 export const requireAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const profile = await loadActiveProfile(req.user!.id)
 
-    const { data: profile, error } = await db
-        .from('profiles')
-        .select('id, organisations_id, role, is_active')
-        .eq('id', req.user!.id)
-        .single()
-
-    console.log('profile:', profile)
-    console.log('error:', error)
-
-    if (error || !profile || !profile.is_active || profile.role !== 'admin') {
+    if (!profile || profile.role !== 'admin') {
         res.status(403).json({ success: false, error: 'Adgang nægtet.' })
         return
     }
@@ -77,21 +82,9 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
 }
 
 export const requireManager = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const { data: profile, error } = await db
-        .from('profiles')
-        .select('id, organisations_id, role, is_active')
-        .eq('id', req.user!.id)
-        .single()
+    const profile = await loadActiveProfile(req.user!.id)
 
-    console.log('profile:', profile)
-    console.log('error:', error)
-
-    if (
-        error ||
-        !profile ||
-        !profile.is_active ||
-        !['admin', 'manager'].includes(profile.role)
-    ) {
+    if (!profile || !['admin', 'manager'].includes(profile.role)) {
         res.status(403).json({ success: false, error: 'Adgang nægtet.' })
         return
     }

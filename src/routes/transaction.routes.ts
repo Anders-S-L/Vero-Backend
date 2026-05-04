@@ -1,12 +1,12 @@
 import { Router } from 'express'
 import { createTransactionController, getTransactionsController, updateTransactionController, deleteTransactionController } from '../controllers/transaction.controller'
-import { requireAuth, requireAdmin } from '../middleware/access.middleware'
+import { requireActiveProfile, requireAuth, requireManager } from '../middleware/access.middleware'
 
 const transactionRouter = Router()
 
-transactionRouter.get('/', requireAuth, requireAdmin, getTransactionsController)
-transactionRouter.post('/', requireAuth, requireAdmin, createTransactionController)
-transactionRouter.put('/:id', requireAuth, requireAdmin, updateTransactionController)
-transactionRouter.delete('/:id', requireAuth, requireAdmin, deleteTransactionController)
+transactionRouter.get('/', requireAuth, requireActiveProfile, getTransactionsController)
+transactionRouter.post('/', requireAuth, requireActiveProfile, createTransactionController)
+transactionRouter.put('/:id', requireAuth, requireManager, updateTransactionController)
+transactionRouter.delete('/:id', requireAuth, requireManager, deleteTransactionController)
 
 export default transactionRouter

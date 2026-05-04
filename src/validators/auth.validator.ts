@@ -75,8 +75,8 @@ export const validateInviteEmployeeInput = (payload: unknown): InviteEmployeeReq
         throw new Error('fullName skal være mindst 2 tegn.')
     }
 
-    if (!role || !['manager', 'employee', 'auditor'].includes(role)) {
-        throw new Error('role skal være manager, employee eller auditor.')
+    if (!role || !['manager', 'employee'].includes(role)) {
+        throw new Error('role skal vaere manager eller employee.')
     }
 
     if (!departmentId || !isUuid(departmentId)) {

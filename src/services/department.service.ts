@@ -1,5 +1,11 @@
 import { db } from '../lib/supabase'
 
+type AccessProfile = {
+    id: string
+    organisations_id: string
+    role: 'admin' | 'manager' | 'employee'
+}
+
 export const createDepartmentService = async (organisationId: string, name: string) => {
     const { data: existing } = await db
         .from('departments')
@@ -31,6 +37,22 @@ export const getDepartmentsService = async (organisationId: string) => {
 
     if (error) throw new Error('Kunne ikke hente departments.')
     return data
+}
+
+export const getAccessibleDepartmentsService = async (profile: AccessProfile) => {
+    if (profile.role === 'admin') return getDepartmentsService(profile.organisations_id)
+
+    const { data, error } = await db
+        .from('profile_department_access')
+        .select('departments(id, name, is_active, created_at)')
+        .eq('profile_id', profile.id)
+
+    if (error) throw new Error('Kunne ikke hente departments.')
+
+    return (data ?? [])
+        .map((row: any) => row.departments)
+        .filter((department: any) => department?.is_active)
+        .sort((a: any, b: any) => String(a.created_at).localeCompare(String(b.created_at)))
 }
 
 const getDepartmentById = async (organisationId: string, id: string) => {

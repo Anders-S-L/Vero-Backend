@@ -1,11 +1,17 @@
 import { db, supabaseAdmin } from '../lib/supabase'
 
+type RequesterProfile = {
+    id: string
+    organisations_id: string
+    role: 'admin' | 'manager' | 'employee'
+}
+
 type AuthEmailById = Record<string, string>
 
 type ProfileRow = {
     id: string
     full_name?: string | null
-    role?: 'admin' | 'manager' | 'employee' | 'auditor'
+    role?: 'admin' | 'manager' | 'employee'
     is_active?: boolean
     invited_by?: string | null
     created_at?: string
@@ -77,19 +83,8 @@ const getProfilesForOrganisation = async (organisationId: string) => {
     return fallbackQuery.data as ProfileRow[]
 }
 
-export const getProfilesService = async (requesterId: string) => {
-    const { data: requesterProfile, error: requesterProfileError } = await db
-        .from('profiles')
-        .select('organisations_id')
-        .eq('id', requesterId)
-        .single()
-
-    if (requesterProfileError || !requesterProfile) {
-        throw new Error('Kunne ikke finde brugerens organisation.')
-    }
-
-
-    const profiles = await getProfilesForOrganisation(requesterProfile.organisations_id)
+export const getProfilesService = async (requesterProfile: RequesterProfile) => {
+    let profiles = await getProfilesForOrganisation(requesterProfile.organisations_id)
     const profileIds = profiles.map((profile) => profile.id)
 
 
@@ -105,7 +100,23 @@ export const getProfilesService = async (requesterId: string) => {
             }
         })
 
-    const emailsById = await findAuthEmailsByIds(profileIds)
+    if (requesterProfile.role === 'manager') {
+        const requesterDepartmentIds = new Set(
+            (departmentAccessData as DepartmentAccessRow[] | null)
+                ?.filter((row) => row.profile_id === requesterProfile.id)
+                .map((row) => row.department_id) ?? [],
+        )
+
+        profiles = profiles.filter((profile) => {
+            if (profile.id === requesterProfile.id) return true
+            if (profile.role === 'admin') return false
+            const profileDepartment = departmentByProfileId.get(profile.id)
+            return Boolean(profileDepartment && requesterDepartmentIds.has(profileDepartment.department_id))
+        })
+    }
+
+    const visibleProfileIds = profiles.map((profile) => profile.id)
+    const emailsById = await findAuthEmailsByIds(visibleProfileIds)
 
     return profiles.map((profile) => {
         const primaryDepartment = departmentByProfileId.get(profile.id)

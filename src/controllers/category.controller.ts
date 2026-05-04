@@ -8,7 +8,7 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
             type: string
             department_id: string
         }
-        const data = await createCategoryService(req.userProfile!.organisations_id, department_id, name, type)
+        const data = await createCategoryService(req.userProfile!, department_id, name, type)
         res.status(201).json({ success: true, data })
     } catch (error) {
         res.status(400).json({ success: false, error: (error as Error).message })
@@ -18,7 +18,7 @@ export const createCategory = async (req: Request, res: Response): Promise<void>
 export const getCategories = async (req: Request, res: Response): Promise<void> => {
     try {
         const departmentId = req.query.department_id as string | undefined
-        const data = await getCategoriesService(req.userProfile!.organisations_id, departmentId)
+        const data = await getCategoriesService(req.userProfile!, departmentId)
         res.status(200).json({ success: true, data })
     } catch (error) {
         res.status(400).json({ success: false, error: (error as Error).message })
@@ -32,7 +32,7 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
             name: string
             type: string
         }
-        const data = await updateCategoryService(req.userProfile!.organisations_id, id, name, type)
+        const data = await updateCategoryService(req.userProfile!, id, name, type)
         res.status(200).json({ success: true, data })
     } catch (error) {
         res.status(400).json({ success: false, error: (error as Error).message })
@@ -42,7 +42,7 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
 export const deleteCategory = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params
-        await deleteCategoryService(req.userProfile!.organisations_id, id)
+        await deleteCategoryService(req.userProfile!, id)
         res.status(200).json({ success: true })
     } catch (error) {
         res.status(400).json({ success: false, error: (error as Error).message })
