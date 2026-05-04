@@ -7,7 +7,7 @@ import {
     rebuildKpisController,
     replaceTrackedKpisController,
 } from '../controllers/kpi.controller'
-import { requireAuth, requireAdmin } from '../middleware/access.middleware'
+import { requireActiveProfile, requireAuth, requireAdmin } from '../middleware/access.middleware'
 
 const kpiRouter = Router()
 
@@ -18,10 +18,10 @@ kpiRouter.get('/tracked', requireAuth, requireAdmin, getTrackedKpisController)
 // Erstatter organisationens valgte KPIer.
 kpiRouter.put('/tracked', requireAuth, requireAdmin, replaceTrackedKpisController)
 // Henter historiske KPI-værdier for én KPI over tid.
-kpiRouter.get('/history', requireAuth, requireAdmin, getKpiHistoryController)
+kpiRouter.get('/history', requireAuth, requireActiveProfile, getKpiHistoryController)
 // Genberegner og gemmer månedlige KPI-værdier for et datointerval.
 kpiRouter.post('/rebuild', requireAuth, requireAdmin, rebuildKpisController)
 // Henter KPI'er for en valgt periode for den organisation, den loggede admin tilhører.
-kpiRouter.get('/', requireAuth, requireAdmin, getKpisController)
+kpiRouter.get('/', requireAuth, requireActiveProfile, getKpisController)
 
 export default kpiRouter

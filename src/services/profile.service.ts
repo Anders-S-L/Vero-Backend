@@ -94,24 +94,29 @@ export const getProfilesService = async (requesterProfile: RequesterProfile) => 
         .in('profile_id', profileIds)
 
     const departmentByProfileId = new Map<string, DepartmentAccessRow>()
+    const departmentIdsByProfileId = new Map<string, Set<string>>()
+
         ; (departmentAccessData as DepartmentAccessRow[] | null)?.forEach((row) => {
             if (!departmentByProfileId.has(row.profile_id)) {
                 departmentByProfileId.set(row.profile_id, row)
             }
+
+            const departmentIds = departmentIdsByProfileId.get(row.profile_id) ?? new Set<string>()
+            departmentIds.add(row.department_id)
+            departmentIdsByProfileId.set(row.profile_id, departmentIds)
         })
 
-    if (requesterProfile.role === 'manager') {
-        const requesterDepartmentIds = new Set(
-            (departmentAccessData as DepartmentAccessRow[] | null)
-                ?.filter((row) => row.profile_id === requesterProfile.id)
-                .map((row) => row.department_id) ?? [],
-        )
+    if (requesterProfile.role === 'manager' || requesterProfile.role === 'employee') {
+        const requesterDepartmentIds = departmentIdsByProfileId.get(requesterProfile.id) ?? new Set<string>()
 
         profiles = profiles.filter((profile) => {
             if (profile.id === requesterProfile.id) return true
             if (profile.role === 'admin') return false
-            const profileDepartment = departmentByProfileId.get(profile.id)
-            return Boolean(profileDepartment && requesterDepartmentIds.has(profileDepartment.department_id))
+            const profileDepartmentIds = departmentIdsByProfileId.get(profile.id)
+            return Boolean(
+                profileDepartmentIds &&
+                [...profileDepartmentIds].some((departmentId) => requesterDepartmentIds.has(departmentId)),
+            )
         })
     }
 
@@ -135,4 +140,39 @@ export const getProfilesService = async (requesterProfile: RequesterProfile) => 
             departments: primaryDepartment?.departments || null,
         }
     })
+}
+
+export const getOwnProfileService = async (requesterProfile: RequesterProfile) => {
+    const { data, error } = await db
+        .from('profiles')
+        .select('id, full_name, role')
+        .eq('id', requesterProfile.id)
+        .eq('organisations_id', requesterProfile.organisations_id)
+        .single()
+
+    if (error || !data) throw new Error('Kunne ikke hente profil.')
+
+    return {
+        id: data.id,
+        full_name: data.full_name || null,
+        role: data.role || requesterProfile.role,
+    }
+}
+
+export const updateOwnProfileNameService = async (requesterProfile: RequesterProfile, fullName: string) => {
+    const { data, error } = await db
+        .from('profiles')
+        .update({ full_name: fullName })
+        .eq('id', requesterProfile.id)
+        .eq('organisations_id', requesterProfile.organisations_id)
+        .select('id, full_name, role')
+        .single()
+
+    if (error || !data) throw new Error('Kunne ikke opdatere profil.')
+
+    return {
+        id: data.id,
+        full_name: data.full_name || null,
+        role: data.role || requesterProfile.role,
+    }
 }
