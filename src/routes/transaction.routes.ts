@@ -6,7 +6,7 @@ const transactionRouter = Router()
 
 transactionRouter.get('/', requireAuth, requireActiveProfile, getTransactionsController)
 transactionRouter.post('/', requireAuth, requireActiveProfile, createTransactionController)
-transactionRouter.put('/:id', requireAuth, requireManager, updateTransactionController)
+transactionRouter.put('/:id', requireAuth, requireActiveProfile, updateTransactionController)
 transactionRouter.delete('/:id', requireAuth, requireManager, deleteTransactionController)
 
 export default transactionRouter
