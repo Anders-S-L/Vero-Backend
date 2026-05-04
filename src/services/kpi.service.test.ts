@@ -31,9 +31,9 @@ test('calculateKpis computes supported metrics from transaction data', () => {
         [
             transaction('prev-income', 1000, '2026-03-01', 'income'),
             transaction('income', 1500, '2026-03-02', 'income'),
-            transaction('expense', 400, '2026-03-03', 'expense'),
-            transaction('tax', 100, '2026-03-04', 'tax'),
-            transaction('depreciation', 50, '2026-03-05', 'depreciation'),
+            transaction('expense', -400, '2026-03-03', 'expense'),
+            transaction('tax', -100, '2026-03-04', 'tax'),
+            transaction('depreciation', -50, '2026-03-05', 'depreciation'),
         ],
         '2026-03-02',
         '2026-03-05',
@@ -47,8 +47,8 @@ test('calculateKpis computes supported metrics from transaction data', () => {
     assert.equal(result.metrics.monthlyGrowthRate.available, true)
     assert.ok(result.metrics.burnRate.value !== null)
     assert.ok(Math.abs(result.metrics.burnRate.value - 3804.6875) < 1e-9)
-    assert.equal(result.metrics.revenue.definition, '')
-    assert.deepEqual(result.metrics.revenue.calculationExample, [])
+    assert.match(result.metrics.revenue.definition, /samlede indkomst/i)
+    assert.ok(result.metrics.revenue.calculationExample.length > 0)
     assert.equal(result.transactionCount, 4)
 })
 
@@ -60,11 +60,11 @@ test('calculateKpis marks unsupported metrics as unavailable with reasons', () =
     )
 
     assert.equal(result.metrics.variableCosts.available, false)
-    assert.match(result.metrics.variableCosts.reason ?? '', /COGS|variable costs/i)
+    assert.match(result.metrics.variableCosts.reason ?? '', /variabel omkostningsadfærd/i)
     assert.equal(result.metrics.grossMargin.available, false)
-    assert.match(result.metrics.grossMargin.reason ?? '', /COGS|variable costs/i)
+    assert.match(result.metrics.grossMargin.reason ?? '', /cogs/i)
     assert.equal(result.metrics.monthlyGrowthRate.available, false)
     assert.match(result.metrics.monthlyGrowthRate.reason ?? '', /foregående sammenligningsperiode/i)
-    assert.equal(result.metrics.variableCosts.definition, '')
-    assert.deepEqual(result.metrics.variableCosts.calculationExample, [])
+    assert.match(result.metrics.variableCosts.definition, /cost_behavior/i)
+    assert.ok(result.metrics.variableCosts.calculationExample.length > 0)
 })
