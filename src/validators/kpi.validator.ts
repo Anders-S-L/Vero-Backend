@@ -2,9 +2,10 @@ import { KPI_DEFINITIONS } from '../services/kpi.service'
 import { SupportedKpiKey } from '../types'
 
 export const validateKpiQuery = (query: unknown) => {
-    const { from, to } = query as {
+    const { from, to, department_id } = query as {
         from?: string
         to?: string
+        department_id?: string
     }
 
     // KPI-endpointet kræver altid en eksplicit periode, så beregninger og sammenligninger er entydige.
@@ -16,7 +17,11 @@ export const validateKpiQuery = (query: unknown) => {
         throw new Error('from må ikke være senere end to.')
     }
 
-    return { from, to }
+    if (department_id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(department_id)) {
+        throw new Error('department_id skal være et gyldigt UUID.')
+    }
+
+    return { from, to, department_id }
 }
 
 export const validateTrackedKpisBody = (body: unknown) => {

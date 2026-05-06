@@ -1,16 +1,23 @@
 import { Request, Response } from 'express'
 import { calculateInclusiveDays, calculateKpis, shiftDateByDays } from '../services/kpi.service'
 import { getTransactionsForKpi } from '../services/transaction.service'
+import { assertDepartmentAccess } from '../services/category.service'
 import { getKpiHistory, getTransactionDateRange, recalculateKpiRange } from '../services/kpi-value.service'
 import { getTrackedKpis, listAvailableKpis, replaceTrackedKpis } from '../services/organisation-kpi.service'
 import { validateKpiHistoryQuery, validateKpiQuery, validateTrackedKpisBody } from '../validators/kpi.validator'
 
 export const getKpisController = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { from, to } = validateKpiQuery(req.query)
+        const { from, to, department_id } = validateKpiQuery(req.query)
         const comparisonDays = calculateInclusiveDays(from, to)
         const queryFrom = shiftDateByDays(from, -comparisonDays)
-        const transactions = await getTransactionsForKpi(req.userProfile!.organisations_id, queryFrom, to)
+        const profile = req.userProfile!
+
+        if (profile.role !== 'admin') {
+            if (department_id) await assertDepartmentAccess(profile, department_id)
+        }
+
+        const transactions = await getTransactionsForKpi(profile, queryFrom, to, department_id)
         const data = calculateKpis(transactions, from, to)
 
         res.status(200).json({ success: true, data })

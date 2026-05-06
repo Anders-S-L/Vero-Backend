@@ -40,8 +40,7 @@ export const createTransaction = async (
         .select('id, organisations_id, category_id, amount, date, description, created_at')
         .order('date', { ascending: true })
 
-    console.log('transaction data:', data)
-    console.log('transaction error:', error)
+
 
     if (error || !data || data.length === 0) throw new Error('Kunne ikke oprette transaktion.')
 
@@ -107,21 +106,33 @@ export const getTransactions = async (profile: AccessProfile) => {
 }
 
 export const getTransactionsForKpi = async (
-    organisationId: string,
+    profile: AccessProfile,
     from: string,
     to: string,
+    departmentId?: string,
 ): Promise<Transaction[]> => {
     // KPI-beregninger kræver kategoriens type, så vi joiner categories på hver transaktion.
-    const { data, error } = await db
+    let query = db
         .from('transactions')
         .select(
             'id, organisations_id, category_id, amount, date, description, created_at, category:categories!inner(id, name, type, statement_section, cost_behavior, is_cash)',
         )
-        .eq('organisations_id', organisationId)
+        .eq('organisations_id', profile.organisations_id)
         .eq('is_deleted', false)
         .gte('date', from)
         .lte('date', to)
-        .order('date', { ascending: true })
+    if (departmentId) {
+        query = query.eq('category.department_id', departmentId)
+    } else {
+        const accessibleDepartmentIds = await getAccessibleDepartmentIds(profile)
+        if (accessibleDepartmentIds && accessibleDepartmentIds.length === 0) return []
+        if (accessibleDepartmentIds) {
+            query = query.in('category.department_id', accessibleDepartmentIds)
+        }
+    }
+
+    const { data, error } = await query.order('date', { ascending: true })
+
 
     if (error) throw new Error('Kunne ikke hente transaktioner til KPI.')
 

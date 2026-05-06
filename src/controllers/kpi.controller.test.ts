@@ -7,7 +7,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ??
 
 type KpiRequest = {
     query: { from: string; to: string }
-    userProfile: { organisations_id: string }
+    userProfile: { organisations_id: string; role: 'admin' | 'manager' | 'employee' }
 }
 
 type JsonResponse = {
