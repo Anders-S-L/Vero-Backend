@@ -3,12 +3,13 @@ import { createCategoryService, deleteCategoryService, getCategoriesService, upd
 
 export const createCategory = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { name, type, department_id } = req.body as {
+        const { name, type, department_id, cost_behavior } = req.body as {
             name: string
             type: string
             department_id: string
+            cost_behavior: string | null
         }
-        const data = await createCategoryService(req.userProfile!, department_id, name, type)
+        const data = await createCategoryService(req.userProfile!, department_id, name, type, cost_behavior)
         res.status(201).json({ success: true, data })
     } catch (error) {
         res.status(400).json({ success: false, error: (error as Error).message })
@@ -28,11 +29,12 @@ export const getCategories = async (req: Request, res: Response): Promise<void> 
 export const updateCategory = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params
-        const { name, type } = req.body as {
+        const { name, type, cost_behavior } = req.body as {
             name: string
             type: string
+            cost_behavior: string | null
         }
-        const data = await updateCategoryService(req.userProfile!, id, name, type)
+        const data = await updateCategoryService(req.userProfile!, id, name, type, cost_behavior)
         res.status(200).json({ success: true, data })
     } catch (error) {
         res.status(400).json({ success: false, error: (error as Error).message })

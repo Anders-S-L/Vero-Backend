@@ -42,7 +42,7 @@ export const validateTrackedKpisBody = (body: unknown) => {
 }
 
 export const validateKpiHistoryQuery = (query: unknown) => {
-    const { from, to } = validateKpiQuery(query)
+    const { from, to, department_id } = validateKpiQuery(query)
     const { kpiKey } = query as {
         kpiKey?: string
     }
@@ -50,5 +50,5 @@ export const validateKpiHistoryQuery = (query: unknown) => {
     if (!kpiKey) throw new Error('Query parameter kpiKey er påkrævet.')
     if (!(kpiKey in KPI_DEFINITIONS)) throw new Error('kpiKey er ugyldig.')
 
-    return { from, to, kpiKey: kpiKey as SupportedKpiKey }
+    return { from, to, department_id, kpiKey: kpiKey as SupportedKpiKey }
 }

@@ -152,10 +152,17 @@ export const getOwnProfileService = async (requesterProfile: RequesterProfile) =
 
     if (error || !data) throw new Error('Kunne ikke hente profil.')
 
+    const { data: departmentAccess } = await db
+        .from('profile_department_access')
+        .select('department_id')
+        .eq('profile_id', requesterProfile.id)
+        .limit(1)
+
     return {
         id: data.id,
         full_name: data.full_name || null,
         role: data.role || requesterProfile.role,
+        department_id: departmentAccess?.[0]?.department_id || null,
     }
 }
 
@@ -170,9 +177,16 @@ export const updateOwnProfileNameService = async (requesterProfile: RequesterPro
 
     if (error || !data) throw new Error('Kunne ikke opdatere profil.')
 
+    const { data: departmentAccess } = await db
+        .from('profile_department_access')
+        .select('department_id')
+        .eq('profile_id', requesterProfile.id)
+        .limit(1)
+
     return {
         id: data.id,
         full_name: data.full_name || null,
         role: data.role || requesterProfile.role,
+        department_id: departmentAccess?.[0]?.department_id || null,
     }
 }

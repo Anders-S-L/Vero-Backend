@@ -54,6 +54,7 @@ export type Transaction = {
     amount: number | string
     date: string
     description: string | null
+    cost_behavior?: string | null
     created_at: string
     category?: TransactionCategory | null
 }

@@ -16,6 +16,7 @@ export const createTransaction = async (
     date: string,
     category_id: string,
     description: string | null,
+    costBehavior: string | null = null,
     repeatMonthly = false,
     repeatUntil: string | null = null,
 ) => {
@@ -31,13 +32,14 @@ export const createTransaction = async (
         date,
         category_id,
         description,
+        cost_behavior: category.type === 'expense' ? costBehavior : null,
         is_deleted: false,
     }]
 
     const { data, error } = await db
         .from('transactions')
         .insert(rows)
-        .select('id, organisations_id, category_id, amount, date, description, created_at')
+        .select('id, organisations_id, category_id, amount, date, description, cost_behavior, created_at')
         .order('date', { ascending: true })
 
 
@@ -81,6 +83,7 @@ export const getTransactions = async (profile: AccessProfile) => {
             amount,
             date,
             description,
+            cost_behavior,
             created_at,
             categories!inner (
                 id,
@@ -115,7 +118,7 @@ export const getTransactionsForKpi = async (
     let query = db
         .from('transactions')
         .select(
-            'id, organisations_id, category_id, amount, date, description, created_at, category:categories!inner(id, name, type, statement_section, cost_behavior, is_cash)',
+            'id, organisations_id, category_id, amount, date, description, cost_behavior, created_at, category:categories!inner(id, name, type, statement_section, cost_behavior, is_cash)',
         )
         .eq('organisations_id', profile.organisations_id)
         .eq('is_deleted', false)
@@ -146,7 +149,7 @@ export const getTransactionsForKpi = async (
 const getTransactionById = async (organisationId: string, id: string) => {
     const { data, error } = await db
         .from('transactions')
-        .select('id, organisations_id, category_id, amount, date, description, created_at, is_deleted')
+        .select('id, organisations_id, category_id, amount, date, description, cost_behavior, created_at, is_deleted')
         .eq('id', id)
         .eq('organisations_id', organisationId)
         .single()
@@ -155,16 +158,29 @@ const getTransactionById = async (organisationId: string, id: string) => {
     return data
 }
 
-export const updateTransaction = async (profile: AccessProfile, id: string, amount: number, date: string, description: string | null) => {
+export const updateTransaction = async (
+    profile: AccessProfile,
+    id: string,
+    amount: number,
+    date: string,
+    description: string | null,
+    costBehavior: string | null = null,
+) => {
     const existing = await getTransactionById(profile.organisations_id, id)
-    await assertCategoryAccess(profile, existing.category_id)
+    const category = await assertCategoryAccess(profile, existing.category_id)
 
     const { data, error } = await db
         .from('transactions')
-        .update({ amount, date, description, updated_at: new Date().toISOString() })
+        .update({
+            amount,
+            date,
+            description,
+            cost_behavior: category.type === 'expense' ? costBehavior : null,
+            updated_at: new Date().toISOString(),
+        })
         .eq('id', id)
         .eq('organisations_id', profile.organisations_id)
-        .select('id, organisations_id, category_id, amount, date, description, created_at')
+        .select('id, organisations_id, category_id, amount, date, description, cost_behavior, created_at')
         .single()
 
     if (error || !data) throw new Error('Kunne ikke opdatere transaktion.')

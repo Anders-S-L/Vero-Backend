@@ -7,7 +7,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ??
 
 type KpiRequest = {
     query: { from: string; to: string }
-    userProfile: { organisations_id: string; role: 'admin' | 'manager' | 'employee' }
+    userProfile: { id: string; organisations_id: string; role: 'admin' | 'manager' | 'employee' }
 }
 
 type JsonResponse = {
@@ -64,8 +64,8 @@ test('getKpisController applies query period to KPI response and current-period 
     ]
     const calls: Array<{ organisationId: string; from: string; to: string }> = []
 
-    mutableTransactionService.getTransactionsForKpi = async (organisationId: string, from: string, to: string) => {
-        calls.push({ organisationId, from, to })
+    mutableTransactionService.getTransactionsForKpi = async (profile, from: string, to: string) => {
+        calls.push({ organisationId: profile.organisations_id, from, to })
         return allTransactions.filter((item) => item.date >= from && item.date <= to)
     }
 
@@ -74,7 +74,7 @@ test('getKpisController applies query period to KPI response and current-period 
         await controller.getKpisController(
             {
                 query: { from: '2026-03-01', to: '2026-03-31' },
-                userProfile: { organisations_id: 'org-1' },
+                userProfile: { id: 'profile-1', organisations_id: 'org-1', role: 'admin' },
             } as KpiRequest as never,
             marchResponse as never,
         )
@@ -83,7 +83,7 @@ test('getKpisController applies query period to KPI response and current-period 
         await controller.getKpisController(
             {
                 query: { from: '2026-04-01', to: '2026-04-30' },
-                userProfile: { organisations_id: 'org-1' },
+                userProfile: { id: 'profile-1', organisations_id: 'org-1', role: 'admin' },
             } as KpiRequest as never,
             aprilResponse as never,
         )

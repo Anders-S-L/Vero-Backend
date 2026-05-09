@@ -69,12 +69,12 @@ export const calculateKpis = (transactions: Transaction[], from: string, to: str
 
     // ── Variable costs (expense transactions tagged cost_behavior = 'variable') ─
     const variableSum = current.reduce((s, t) =>
-        t.category?.cost_behavior === 'variable' && normalizeCategoryType(t.category?.type) === 'expense'
+        (t.cost_behavior ?? t.category?.cost_behavior) === 'variable' && normalizeCategoryType(t.category?.type) === 'expense'
             ? s + Number(t.amount) : s, 0)
 
     const hasCogsData = current.some((t) => t.category?.statement_section === 'cogs')
     const hasVariableData = current.some(
-        (t) => t.category?.cost_behavior === 'variable' && normalizeCategoryType(t.category?.type) === 'expense'
+        (t) => (t.cost_behavior ?? t.category?.cost_behavior) === 'variable' && normalizeCategoryType(t.category?.type) === 'expense'
     )
 
     // ── Core KPI formulas ────────────────────────────────────────────────────

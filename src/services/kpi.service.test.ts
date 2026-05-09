@@ -8,6 +8,7 @@ const transaction = (
     amount: number,
     date: string,
     categoryType: string,
+    costBehavior: string | null = null,
 ): Transaction => ({
     id,
     organisations_id: 'org-1',
@@ -15,6 +16,7 @@ const transaction = (
     amount,
     date,
     description: null,
+    cost_behavior: costBehavior,
     created_at: '2026-04-08T00:00:00.000Z',
     category: {
         id: `cat-${id}`,
@@ -31,7 +33,7 @@ test('calculateKpis computes supported metrics from transaction data', () => {
         [
             transaction('prev-income', 1000, '2026-03-01', 'income'),
             transaction('income', 1500, '2026-03-02', 'income'),
-            transaction('expense', -400, '2026-03-03', 'expense'),
+            transaction('expense', -400, '2026-03-03', 'expense', 'variable'),
             transaction('tax', -100, '2026-03-04', 'tax'),
             transaction('depreciation', -50, '2026-03-05', 'depreciation'),
         ],
@@ -41,6 +43,8 @@ test('calculateKpis computes supported metrics from transaction data', () => {
 
     assert.equal(result.metrics.revenue.value, 1500)
     assert.equal(result.metrics.ebitda.value, 1100)
+    assert.equal(result.metrics.variableCosts.value, 400)
+    assert.equal(result.metrics.contributionMargin.value, 1100)
     assert.equal(result.metrics.netResult.value, 950)
     assert.equal(result.metrics.cashFlow.value, 1000)
     assert.equal(result.metrics.monthlyGrowthRate.value, 50)

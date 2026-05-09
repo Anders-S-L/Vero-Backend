@@ -18,6 +18,8 @@ const getAccessibleDepartmentIds = async (profile: AccessProfile) => {
     return (data ?? []).map((row) => row.department_id as string)
 }
 
+const categorySelect = 'id, organisations_id, department_id, name, type, cost_behavior, statement_section, is_cash, is_active, created_at'
+
 export const assertDepartmentAccess = async (profile: AccessProfile, departmentId: string) => {
     if (profile.role === 'admin') return
 
@@ -34,7 +36,7 @@ export const assertDepartmentAccess = async (profile: AccessProfile, departmentI
 export const assertCategoryAccess = async (profile: AccessProfile, categoryId: string) => {
     const { data: category, error } = await db
         .from('categories')
-        .select('id, department_id, type')
+        .select('id, department_id, type, cost_behavior')
         .eq('id', categoryId)
         .eq('organisations_id', profile.organisations_id)
         .eq('is_active', true)
@@ -50,6 +52,7 @@ export const createCategoryService = async (
     departmentId: string,
     name: string,
     type: string,
+    costBehavior: string | null,
 ) => {
     await assertDepartmentAccess(profile, departmentId)
 
@@ -81,12 +84,11 @@ export const createCategoryService = async (
             department_id: departmentId,
             name,
             type,
+            cost_behavior: type === 'expense' ? costBehavior : null,
             is_active: true,
         })
-        .select('id, organisations_id, department_id, name, type, is_active, created_at')
+        .select(categorySelect)
         .single()
-    console.log('data:', data)
-    console.log('error:', error)
 
     if (error || !data) throw new Error('Kunne ikke oprette kategori.')
     return data
@@ -100,7 +102,7 @@ export const getCategoriesService = async (profile: AccessProfile, departmentId?
 
     let query = db
         .from('categories')
-        .select('id, organisations_id, department_id, name, type, is_active, created_at')
+        .select(categorySelect)
         .eq('organisations_id', profile.organisations_id)
         .eq('is_active', true)
 
@@ -116,7 +118,7 @@ export const getCategoriesService = async (profile: AccessProfile, departmentId?
 const getCategoryById = async (organisationId: string, id: string) => {
     const { data, error } = await db
         .from('categories')
-        .select('id, organisations_id, department_id, name, type, is_active, created_at')
+        .select(categorySelect)
         .eq('id', id)
         .eq('organisations_id', organisationId)
         .eq('is_active', true)
@@ -126,7 +128,13 @@ const getCategoryById = async (organisationId: string, id: string) => {
     return data
 }
 
-export const updateCategoryService = async (profile: AccessProfile, id: string, name: string, type: string) => {
+export const updateCategoryService = async (
+    profile: AccessProfile,
+    id: string,
+    name: string,
+    type: string,
+    costBehavior: string | null,
+) => {
     const existingCategory = await getCategoryById(profile.organisations_id, id)
     await assertDepartmentAccess(profile, existingCategory.department_id)
 
@@ -144,11 +152,11 @@ export const updateCategoryService = async (profile: AccessProfile, id: string, 
 
     const { data, error } = await db
         .from('categories')
-        .update({ name, type })
+        .update({ name, type, cost_behavior: type === 'expense' ? costBehavior : null })
         .eq('id', id)
         .eq('organisations_id', profile.organisations_id)
         .eq('is_active', true)
-        .select('id, organisations_id, department_id, name, type, is_active, created_at')
+        .select(categorySelect)
         .single()
 
     if (error || !data) throw new Error('Kunne ikke opdatere kategori.')
