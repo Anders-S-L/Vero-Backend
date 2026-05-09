@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../lib/supabase'
+import { db, supabaseAdmin } from '../lib/supabase'
 import { InviteEmployeeRequest, LoginRequest, UserRole } from '../types/index'
 
 type RegisterOwnerInput = {
@@ -236,14 +236,23 @@ export const loginWithEmailPassword = async (input: LoginRequest) => {
     if (loginResult.error || !loginResult.data.session || !loginResult.data.user) {
         throw new Error(loginResult.error?.message || 'Login fejlede.')
     }
-    const { data: profile } = await supabaseAdmin
+    const { data: profile, error: profileError } = await db
         .from('profiles')
         .select('full_name, role, organisations_id, is_active')
         .eq('id', loginResult.data.user.id)
         .single()
 
+    if (profileError || !profile) {
+        throw new Error('Brugeren har ingen aktiv profil i Vero.')
+    }
+
+    const role = normalizeRole(profile.role)
+    if (!role) {
+        throw new Error('Brugerprofilen har en ugyldig rolle.')
+    }
+
     if (profile && !profile.is_active) {
-        const { error: activationError } = await supabaseAdmin
+        const { error: activationError } = await db
             .from('profiles')
             .update({ is_active: true })
             .eq('id', loginResult.data.user.id)
@@ -255,7 +264,7 @@ export const loginWithEmailPassword = async (input: LoginRequest) => {
         profile.is_active = true
     }
 
-    const { data: organisation } = await supabaseAdmin
+    const { data: organisation } = await db
         .from('organisations')
         .select('name')
         .eq('id', profile?.organisations_id)
@@ -270,7 +279,7 @@ export const loginWithEmailPassword = async (input: LoginRequest) => {
         expiresIn: loginResult.data.session.expires_in,
         tokenType: loginResult.data.session.token_type,
         fullName: profile?.full_name,
-        role: normalizeRole(profile?.role),
+        role,
         organisationName: organisation?.name,
     }
 }
